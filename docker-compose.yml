@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cvshortlister-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cvshortlister}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      POSTGRES_DB: ${POSTGRES_DB:-cvshortlister}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cvshortlister}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cvshortlister-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: cvshortlister-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cvshortlister-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cvshortlister-backend
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-cvshortlister}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_in_production}
+      - POSTGRES_DB=${POSTGRES_DB:-cvshortlister}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production-min-32-chars}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - UPLOAD_DIR=/app/storage/uploads
+    volumes:
+      - ./backend:/app
+      - upload_storage:/app/storage/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cvshortlister-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cvshortlister-worker
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-cvshortlister}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_in_production}
+      - POSTGRES_DB=${POSTGRES_DB:-cvshortlister}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production-min-32-chars}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - UPLOAD_DIR=/app/storage/uploads
+    volumes:
+      - ./backend:/app
+      - upload_storage:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cvshortlister-network
+    command: celery -A app.worker.celery_app worker --loglevel=info
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cvshortlister-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - cvshortlister-network
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:
+  upload_storage:
+
+networks:
+  cvshortlister-network:
+    driver: bridge
