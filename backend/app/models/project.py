@@ -3,6 +3,7 @@ Project Model
 """
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,6 +26,12 @@ class Project(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="projects")
+    role: Mapped[Optional["Role"]] = relationship(
+        "Role",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
     def __repr__(self) -> str:
         return f"<Project(id={self.id}, name={self.name})>"
@@ -32,3 +39,4 @@ class Project(Base):
 
 # Import User at the end to avoid circular imports
 from app.models.user import User  # noqa: E402, F401
+from app.models.role import Role  # noqa: E402, F401

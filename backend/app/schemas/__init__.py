@@ -14,6 +14,12 @@ from app.schemas.project import (
     ProjectResponse,
     ProjectUpdate,
 )
+from app.schemas.role import (
+    RoleCriteriaIntake,
+    RoleResponse,
+    RoleSuggestRequest,
+    RoleSuggestResponse,
+)
 
 __all__ = [
     "UserCreate",
@@ -26,4 +32,8 @@ __all__ = [
     "ProjectUpdate",
     "ProjectResponse",
     "ProjectListResponse",
+    "RoleCriteriaIntake",
+    "RoleResponse",
+    "RoleSuggestRequest",
+    "RoleSuggestResponse",
 ]

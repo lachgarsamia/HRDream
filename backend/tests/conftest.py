@@ -5,10 +5,12 @@ import asyncio
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
+from sqlalchemy.exc import ProgrammingError
 
 from app.main import app
 from app.core.database import async_session_maker
 from app.models.project import Project
+from app.models.role import Role
 from app.models.user import User
 
 
@@ -24,11 +26,19 @@ def event_loop():
 async def clean_database() -> None:
     """Ensure tests run with a clean database state."""
     async with async_session_maker() as session:
+        try:
+            await session.execute(delete(Role))
+        except ProgrammingError:
+            await session.rollback()
         await session.execute(delete(Project))
         await session.execute(delete(User))
         await session.commit()
     yield
     async with async_session_maker() as session:
+        try:
+            await session.execute(delete(Role))
+        except ProgrammingError:
+            await session.rollback()
         await session.execute(delete(Project))
         await session.execute(delete(User))
         await session.commit()
