@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ApiError } from "@/lib/api-client";
+import type { ApiError } from "@/lib/api";
 
 const registerSchema = z
   .object({

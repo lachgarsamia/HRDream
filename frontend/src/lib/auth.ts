@@ -2,7 +2,7 @@
  * Auth Types and API Functions
  */
 
-import { apiClient } from "./api-client";
+import { apiFetch, TOKEN_KEY } from "./api";
 
 // Types
 export interface User {
@@ -27,8 +27,6 @@ export interface AuthResponse {
 }
 
 // Token management
-const TOKEN_KEY = "cv_shortlister_token";
-
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);
@@ -37,36 +35,39 @@ export function getStoredToken(): string | null {
 export function setStoredToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(TOKEN_KEY, token);
-  apiClient.setToken(token);
 }
 
 export function removeStoredToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
-  apiClient.setToken(null);
 }
 
 // Initialize token from storage
 export function initializeAuth(): void {
-  const token = getStoredToken();
-  if (token) {
-    apiClient.setToken(token);
-  }
+  // no-op: token is read per-request in apiFetch/apiUpload
 }
 
 // API Functions
 export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
-  const response = await apiClient.post<AuthResponse>("/auth/login", credentials);
+  const response = await apiFetch<AuthResponse>("/auth/login", {
+    method: "POST",
+    data: credentials,
+    auth: false,
+  });
   setStoredToken(response.access_token);
   return response;
 }
 
 export async function register(data: RegisterData): Promise<User> {
-  return apiClient.post<User>("/auth/register", data);
+  return apiFetch<User>("/auth/register", {
+    method: "POST",
+    data,
+    auth: false,
+  });
 }
 
 export async function getCurrentUser(): Promise<User> {
-  return apiClient.get<User>("/me");
+  return apiFetch<User>("/me");
 }
 
 export async function logout(): Promise<void> {

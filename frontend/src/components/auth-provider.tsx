@@ -20,6 +20,7 @@ import {
   initializeAuth,
   getStoredToken,
 } from "@/lib/auth";
+import type { ApiError } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
@@ -39,6 +40,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth on mount
   useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null);
+      router.push("/login");
+    };
+
     const init = async () => {
       initializeAuth();
       const token = getStoredToken();
@@ -47,17 +53,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const currentUser = await getCurrentUser();
           setUser(currentUser);
-        } catch {
+        } catch (error) {
           // Token invalid, clear it
           await apiLogout();
+          const apiError = error as ApiError;
+          if (apiError?.status === 401) {
+            setUser(null);
+          }
         }
       }
       
       setIsLoading(false);
     };
 
+    window.addEventListener("auth:unauthorized", onUnauthorized as EventListener);
     init();
-  }, []);
+    return () => {
+      window.removeEventListener("auth:unauthorized", onUnauthorized as EventListener);
+    };
+  }, [router]);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     await apiLogin(credentials);

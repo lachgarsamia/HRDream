@@ -1,4 +1,4 @@
-import { apiClient } from "./api-client";
+import { apiDownload, apiFetch, apiUpload } from "./api";
 
 export interface Job {
   id: number;
@@ -23,6 +23,123 @@ export interface JobListResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface JobFile {
+  id: number;
+  job_id: number;
+  original_filename: string;
+  storage_path: string;
+  mime_type: string;
+  status: string;
+  warnings_json: { items?: string[] } | null;
+  batch_id: string;
+  created_at: string;
+}
+
+export interface JobFileListResponse {
+  items: JobFile[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface JobCandidate {
+  id: number;
+  job_id: number;
+  file_id: number;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  years_experience_est: number | null;
+  skills_top_json: { items?: string[] } | null;
+  extracted_contacts_json: {
+    email?: { value: string; confidence: number; evidence?: { page_num: number; snippet: string } } | null;
+    phone?: { value: string; confidence: number; evidence?: { page_num: number; snippet: string } } | null;
+    links?: Array<{ value: string; type: string; confidence: number; evidence?: { page_num: number; snippet: string } }>;
+  } | null;
+  extracted_meta_json: {
+    location_guess?: { value: string; confidence: number; evidence?: { page_num: number; snippet: string } } | null;
+    years_experience_est?: { value: number; confidence: number; evidence?: { page_num: number; snippet: string } } | null;
+  } | null;
+  parsing_warnings_json: { items?: string[] } | null;
+  status: string;
+  batch_id: string;
+  file_status: string;
+  warnings_json: { items?: string[] } | null;
+  created_at: string;
+}
+
+export interface JobCandidateListResponse {
+  items: JobCandidate[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface UploadResponse {
+  batch_id: string;
+  files_created: number;
+  candidate_ids: number[];
+}
+
+export interface RunCreateResponse {
+  id: number;
+  job_id: number;
+  status: string;
+  created_at: string;
+  included_candidate_count: number;
+}
+
+export interface RunListItem {
+  id: number;
+  job_id: number;
+  status: string;
+  created_at: string;
+  scoring_config_version: string;
+}
+
+export interface RunListResponse {
+  items: RunListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface RunResultItem {
+  score_id: number;
+  candidate_id: number;
+  job_id: number;
+  run_id: number;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  years_experience_est: number | null;
+  skills_top_json: { items?: string[] } | null;
+  total_score: number;
+  breakdown_json: { breakdown?: Record<string, number>; reason?: string | null; missing_must_have?: string[] };
+  decision: string;
+}
+
+export interface RunResultsResponse {
+  provenance: {
+    job_id: number;
+    run_id: number;
+    included_candidate_count: number;
+    included_batches: string[];
+    criteria_version: string;
+    scoring_config_version: string;
+    created_at: string;
+  };
+  items: RunResultItem[];
+}
+
+export interface RunExportStatus {
+  csv_ready: boolean;
+  pdf_ready: boolean;
+  reason?: string;
 }
 
 export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead" | "principal";
@@ -101,33 +218,99 @@ export interface RoleSuggestionResponse {
   suggestion: RoleIntakePayload;
 }
 
-export async function getJobs(page: number = 1, pageSize: number = 50): Promise<JobListResponse> {
-  return apiClient.get<JobListResponse>(`/projects?page=${page}&page_size=${pageSize}`);
+export async function getJobs(page: number = 1, pageSize: number = 100): Promise<JobListResponse> {
+  return apiFetch<JobListResponse>(`/jobs?page=${page}&page_size=${pageSize}`);
 }
 
 export async function getJob(id: number): Promise<Job> {
-  return apiClient.get<Job>(`/projects/${id}`);
+  return apiFetch<Job>(`/jobs/${id}`);
 }
 
 export async function createJob(data: JobCreate): Promise<Job> {
-  return apiClient.post<Job>("/projects", data);
+  return apiFetch<Job>("/jobs", { method: "POST", data });
 }
 
 export async function updateJob(id: number, data: JobUpdate): Promise<Job> {
-  return apiClient.patch<Job>(`/projects/${id}`, data);
+  return apiFetch<Job>(`/jobs/${id}`, { method: "PATCH", data });
 }
 
 export async function deleteJob(id: number): Promise<void> {
-  await apiClient.delete(`/projects/${id}`);
+  await apiFetch<void>(`/jobs/${id}`, { method: "DELETE" });
+}
+
+export async function uploadJobFiles(jobId: number, files: globalThis.File[]): Promise<UploadResponse> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+  return apiUpload<UploadResponse>(`/jobs/${jobId}/upload`, formData);
+}
+
+export async function getJobFiles(jobId: number, page: number = 1, pageSize: number = 100): Promise<JobFileListResponse> {
+  return apiFetch<JobFileListResponse>(`/jobs/${jobId}/files?page=${page}&page_size=${pageSize}`);
+}
+
+export async function getJobCandidates(jobId: number, page: number = 1, pageSize: number = 100): Promise<JobCandidateListResponse> {
+  return apiFetch<JobCandidateListResponse>(`/jobs/${jobId}/candidates?page=${page}&page_size=${pageSize}`);
+}
+
+export async function saveJobCriteria(jobId: number, criteria_json: Record<string, unknown>): Promise<{
+  role_id: number;
+  project_id: number;
+  role_title: string;
+  criteria_json: Record<string, unknown>;
+  updated_at: string;
+}> {
+  return apiFetch(`/jobs/${jobId}/criteria`, {
+    method: "POST",
+    data: { criteria_json },
+  });
+}
+
+export async function createJobRun(jobId: number): Promise<RunCreateResponse> {
+  return apiFetch<RunCreateResponse>(`/jobs/${jobId}/runs`, {
+    method: "POST",
+    data: {},
+  });
+}
+
+export async function getJobRuns(jobId: number, page: number = 1, pageSize: number = 20): Promise<RunListResponse> {
+  return apiFetch<RunListResponse>(`/jobs/${jobId}/runs?page=${page}&page_size=${pageSize}`);
+}
+
+export async function getRunResults(runId: number): Promise<RunResultsResponse> {
+  return apiFetch<RunResultsResponse>(`/runs/${runId}/results`);
+}
+
+export async function getRunExportStatus(runId: number): Promise<RunExportStatus> {
+  return apiFetch<RunExportStatus>(`/runs/${runId}/export/status`);
+}
+
+async function downloadRunBinary(runId: number, endpoint: "export.csv" | "report.pdf", filename: string): Promise<void> {
+  await apiDownload(`/runs/${runId}/${endpoint}`, filename);
+}
+
+export async function downloadRunCsv(runId: number): Promise<void> {
+  await downloadRunBinary(runId, "export.csv", `shortlist_run_${runId}.csv`);
+}
+
+export async function downloadRunPdf(runId: number): Promise<void> {
+  await downloadRunBinary(runId, "report.pdf", `shortlist_report_run_${runId}.pdf`);
 }
 
 export async function saveRoleIntake(projectId: number, payload: RoleIntakePayload): Promise<RoleIntakeResponse> {
-  return apiClient.post<RoleIntakeResponse>(`/projects/${projectId}/roles`, payload);
+  return apiFetch<RoleIntakeResponse>(`/projects/${projectId}/roles`, {
+    method: "POST",
+    data: payload,
+  });
 }
 
 export async function suggestRoleIntake(input: {
   role_title: string;
   job_description: string;
 }): Promise<RoleSuggestionResponse> {
-  return apiClient.post<RoleSuggestionResponse>("/roles/suggest", input);
+  return apiFetch<RoleSuggestionResponse>("/roles/suggest", {
+    method: "POST",
+    data: input,
+  });
 }
