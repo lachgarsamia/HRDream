@@ -40,7 +40,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { getJobs, type Job } from "@/lib/jobs";
+import { getJob, getJobs, type Job } from "@/lib/jobs";
 import { cn } from "@/lib/utils";
 
 type WorkspaceTab = "upload" | "criteria" | "shortlist" | "exports";
@@ -385,6 +385,7 @@ export default function JobWorkspacePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [jobLoadFailed, setJobLoadFailed] = useState(false);
   const [queue, setQueue] = useState<IngestionItem[]>([]);
   const [criteriaSaved, setCriteriaSaved] = useState(false);
   const [showAdvancedWeights, setShowAdvancedWeights] = useState(false);
@@ -444,31 +445,32 @@ export default function JobWorkspacePage() {
       return;
     }
 
-    if (!isAuthenticated || Number.isNaN(jobId)) {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    if (Number.isNaN(jobId)) {
+      setJobLoadFailed(true);
+      setLoadingData(false);
       return;
     }
 
     void (async () => {
       try {
         setLoadingData(true);
-        const response = await getJobs(1, 200);
-        setJobs(response.items);
-        const foundJob = response.items.find((job) => job.id === jobId);
-
-        if (!foundJob) {
-          toast.error("Job not found");
-          router.push("/jobs");
-          return;
-        }
-
+        setJobLoadFailed(false);
+        const [jobsResponse, foundJob] = await Promise.all([getJobs(1, 200), getJob(jobId)]);
+        setJobs(jobsResponse.items);
         setCurrentJob(foundJob);
         setCriteria((previous) => ({
           ...previous,
-          jobTitle: foundJob.name,
+          jobTitle: foundJob.name ?? "",
           jobDescription: foundJob.description ?? "",
         }));
       } catch {
-        toast.error("Unable to load this job", { description: "Please refresh and try again." });
+        setJobLoadFailed(true);
+        setCurrentJob(null);
+        toast.error("Unable to load this job", { description: "The job may not exist or you may not have access." });
       } finally {
         setLoadingData(false);
       }
@@ -707,7 +709,7 @@ export default function JobWorkspacePage() {
     }
   };
 
-  if (loadingData || !currentJob) {
+  if (loadingData) {
     return (
       <AppShell title="Job Workspace" subtitle="Loading job workspace...">
         <div className="space-y-4">
@@ -715,6 +717,24 @@ export default function JobWorkspacePage() {
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-[460px] w-full" />
         </div>
+      </AppShell>
+    );
+  }
+
+  if (jobLoadFailed || !currentJob) {
+    return (
+      <AppShell title="Job Workspace" subtitle="Unable to open this job.">
+        <Card className="max-w-xl border-border/80">
+          <CardHeader>
+            <CardTitle>Job not available</CardTitle>
+            <CardDescription>
+              This job could not be loaded. It may not exist, or you may not have access.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => router.push("/jobs")}>Back to Jobs</Button>
+          </CardContent>
+        </Card>
       </AppShell>
     );
   }
