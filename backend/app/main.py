@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health
+from app.api.routes import auth, health, projects
 from app.config import get_settings
 
 # Configure logging
@@ -61,6 +61,8 @@ def create_app() -> FastAPI:
 
     # Register routers
     app.include_router(health.router, tags=["Health"])
+    app.include_router(auth.router)
+    app.include_router(projects.router)
 
     return app
 

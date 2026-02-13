@@ -10,6 +10,47 @@ export interface ApiError {
   status: number;
 }
 
+function normalizeErrorDetail(detail: unknown): string {
+  if (typeof detail === "string" && detail.trim().length > 0) {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (
+          item &&
+          typeof item === "object" &&
+          "msg" in item &&
+          typeof (item as { msg?: unknown }).msg === "string"
+        ) {
+          return (item as { msg: string }).msg;
+        }
+        return null;
+      })
+      .filter((msg): msg is string => Boolean(msg));
+
+    if (messages.length > 0) {
+      return messages.join(", ");
+    }
+  }
+
+  if (detail && typeof detail === "object") {
+    if ("msg" in detail && typeof (detail as { msg?: unknown }).msg === "string") {
+      return (detail as { msg: string }).msg;
+    }
+    if (
+      "detail" in detail &&
+      typeof (detail as { detail?: unknown }).detail === "string"
+    ) {
+      return (detail as { detail: string }).detail;
+    }
+  }
+
+  return "An error occurred";
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -48,7 +89,7 @@ class ApiClient {
         detail: "An error occurred",
       }));
       throw {
-        detail: error.detail || "An error occurred",
+        detail: normalizeErrorDetail(error?.detail),
         status: response.status,
       } as ApiError;
     }
@@ -76,6 +117,13 @@ class ApiClient {
   async put<T>(endpoint: string, data?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: "PUT",
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: "PATCH",
       body: data ? JSON.stringify(data) : undefined,
     });
   }

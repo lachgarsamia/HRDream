@@ -1,58 +1,30 @@
-# CV Shortlister Backend - Python Dependencies
-
-# ---- Core Framework ----
+# Core API
 fastapi==0.109.2
 uvicorn[standard]==0.27.1
 pydantic==2.6.1
 pydantic-settings==2.1.0
 python-multipart==0.0.9
 
-# ---- Database ----
+# Database
 sqlalchemy[asyncio]==2.0.25
 asyncpg==0.29.0
 alembic==1.13.1
 pgvector==0.2.5
 
-# ---- Background Jobs ----
+# Background jobs
 celery[redis]==5.3.6
 redis==5.0.1
 
-# ---- Authentication ----
+# Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# ---- PDF Processing ----
-PyMuPDF==1.23.21
-
-# ---- OCR (PaddleOCR) ----
-paddlepaddle==2.6.0
-paddleocr==2.7.3
-
-# ---- Document Processing ----
-python-docx==1.1.0
-
-# ---- Fuzzy Matching ----
-rapidfuzz==3.6.1
-
-# ---- Embeddings ----
-sentence-transformers==2.3.1
-
-# ---- Export ----
-reportlab==4.1.0
-
-# ---- HTTP Client ----
-httpx==0.26.0
-
-# ---- Utilities ----
+# Utilities
 python-dotenv==1.0.1
 orjson==3.9.13
-
-# ---- Development & Testing ----
-pytest==8.0.0
-pytest-asyncio==0.23.4
-pytest-cov==4.1.0
 httpx==0.26.0
 
-# ---- Linting & Formatting ----
-ruff==0.2.1
-mypy==1.8.0
+# Tests
+pytest==7.4.4
+pytest-asyncio==0.23.4
+pytest-cov==4.1.0
