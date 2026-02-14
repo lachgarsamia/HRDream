@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { FilePickerButton } from "@/components/jobs/file-picker-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,7 +101,6 @@ export default function JobWorkspacePage() {
   const jobId = Number(rawJobId);
   const tab = parseTab(searchParams.get("tab"));
 
-  const directoryInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const [job, setJob] = useState<Job | null>(null);
@@ -269,10 +269,13 @@ export default function JobWorkspacePage() {
       toast.error("Select at least one file first");
       return;
     }
+    console.debug("[Upload] trigger", { jobId, selectedFileCount: selectedFiles.length });
 
     try {
       setIsUploading(true);
+      console.debug("[Upload] request_start", { jobId });
       const response = await uploadJobFiles(jobId, selectedFiles);
+      console.debug("[Upload] request_success", { jobId, batchId: response.batch_id, filesCreated: response.files_created });
       toast.success("Upload complete", {
         description: `Batch ${response.batch_id} indexed ${response.files_created} files.`,
       });
@@ -280,7 +283,7 @@ export default function JobWorkspacePage() {
       await loadWorkspace();
     } catch (caught) {
       const apiError = caught as ApiError;
-      console.error("[Upload error]", apiError);
+      console.error("[Upload] request_failed", { jobId, status: apiError?.status, detail: apiError?.detail });
       toast.error("Upload failed", { description: apiError?.detail || "Please try again." });
     } finally {
       setIsUploading(false);
@@ -471,32 +474,27 @@ export default function JobWorkspacePage() {
                   <UploadCloud className="mx-auto mb-3 h-8 w-8 text-primary" />
                   <p className="text-sm text-muted-foreground">Drop files here or use the buttons below.</p>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    <Label className="cursor-pointer">
-                      <input
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
-                        accept=".pdf,.docx,.zip"
-                      />
-                      <Button type="button" variant="outline">Select files</Button>
-                    </Label>
-                    <Button type="button" variant="outline" onClick={() => directoryInputRef.current?.click()}>
-                      Select folder
-                    </Button>
+                    <FilePickerButton
+                      label="Select files"
+                      accept=".pdf,.docx,.zip"
+                      onFilesSelected={(files) => {
+                        console.debug("[Upload] files_selected", { jobId, count: files.length });
+                        setSelectedFiles(files);
+                      }}
+                    />
+                    <FilePickerButton
+                      label="Select folder"
+                      accept=".pdf,.docx,.zip"
+                      directory
+                      onFilesSelected={(files) => {
+                        console.debug("[Upload] folder_selected", { jobId, count: files.length });
+                        setSelectedFiles(files);
+                      }}
+                    />
                     <Button type="button" onClick={uploadPickedFiles} disabled={isUploading || selectedFiles.length === 0}>
                       {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Upload {selectedFiles.length > 0 ? `(${selectedFiles.length})` : ""}
                     </Button>
-                    <input
-                      ref={directoryInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
-                      // @ts-expect-error webkitdirectory is intentionally non-standard
-                      webkitdirectory=""
-                    />
                   </div>
                 </div>
 

@@ -93,6 +93,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     headers: requestHeaders,
     body: data !== undefined ? JSON.stringify(data) : undefined,
   });
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[apiFetch]", {
+      method,
+      path,
+      status: response.status,
+      hasAuth: requestHeaders.has("Authorization"),
+    });
+  }
 
   if (!response.ok) {
     const error = await parseResponseError(response);
@@ -139,6 +147,15 @@ export async function apiUpload<T>(path: string, formData: FormData, options: Ap
     headers: requestHeaders,
     body: formData,
   });
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[apiUpload]", {
+      method,
+      path,
+      status: response.status,
+      hasAuth: requestHeaders.has("Authorization"),
+      formEntries: Array.from(formData.keys()).length,
+    });
+  }
 
   if (!response.ok) {
     const error = await parseResponseError(response);
@@ -173,6 +190,14 @@ export async function apiDownload(path: string, filename: string, auth = true): 
     method: "GET",
     headers,
   });
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[apiDownload]", {
+      path,
+      status: response.status,
+      filename,
+      hasAuth: headers.has("Authorization"),
+    });
+  }
 
   if (!response.ok) {
     const error = await parseResponseError(response);

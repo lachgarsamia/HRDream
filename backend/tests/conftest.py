@@ -9,8 +9,12 @@ from sqlalchemy.exc import ProgrammingError
 
 from app.main import app
 from app.core.database import async_session_maker
+from app.models.candidate import Candidate
+from app.models.file import File
 from app.models.project import Project
 from app.models.role import Role
+from app.models.score import Score
+from app.models.shortlist_run import ShortlistRun
 from app.models.user import User
 
 
@@ -27,6 +31,10 @@ async def clean_database() -> None:
     """Ensure tests run with a clean database state."""
     async with async_session_maker() as session:
         try:
+            await session.execute(delete(Score))
+            await session.execute(delete(ShortlistRun))
+            await session.execute(delete(Candidate))
+            await session.execute(delete(File))
             await session.execute(delete(Role))
         except ProgrammingError:
             await session.rollback()
@@ -36,6 +44,10 @@ async def clean_database() -> None:
     yield
     async with async_session_maker() as session:
         try:
+            await session.execute(delete(Score))
+            await session.execute(delete(ShortlistRun))
+            await session.execute(delete(Candidate))
+            await session.execute(delete(File))
             await session.execute(delete(Role))
         except ProgrammingError:
             await session.rollback()

@@ -1,5 +1,6 @@
 """Centralized authentication and authorization utilities."""
 
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
@@ -16,6 +17,7 @@ from app.models.user import User
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 def hash_password(password: str) -> str:
@@ -68,6 +70,7 @@ async def get_current_user(
 
     payload = decode_access_token(credentials.credentials)
     user_id = payload.get("sub")
+    logger.info("auth.get_current_user token parsed sub=%s", user_id)
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,6 +80,7 @@ async def get_current_user(
 
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
+    logger.info("auth.get_current_user resolved user_id=%s found=%s", user_id, user is not None)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

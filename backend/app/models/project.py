@@ -32,6 +32,21 @@ class Project(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    files: Mapped[list["File"]] = relationship(
+        "File",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+    candidates: Mapped[list["Candidate"]] = relationship(
+        "Candidate",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+    runs: Mapped[list["ShortlistRun"]] = relationship(
+        "ShortlistRun",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Project(id={self.id}, name={self.name})>"
@@ -40,3 +55,6 @@ class Project(Base):
 # Import User at the end to avoid circular imports
 from app.models.user import User  # noqa: E402, F401
 from app.models.role import Role  # noqa: E402, F401
+from app.models.file import File  # noqa: E402, F401
+from app.models.candidate import Candidate  # noqa: E402, F401
+from app.models.shortlist_run import ShortlistRun  # noqa: E402, F401
