@@ -3,7 +3,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { AuthProvider } from "./auth-provider";
+import { GlobalEffects } from "./global-effects";
+import { I18nProvider } from "./i18n-provider";
+import { PreferencesSync } from "./preferences-sync";
 import { ThemeProvider } from "./theme-provider";
+import { AppToaster } from "./app-toaster";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -21,7 +25,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <PreferencesSync />
+            {children}
+            <GlobalEffects />
+            <AppToaster />
+          </AuthProvider>
+        </I18nProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

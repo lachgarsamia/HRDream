@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
@@ -14,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getJobs, type Job } from "@/lib/jobs";
 
 export default function JobsPage() {
+  const t = useTranslations("jobs");
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -51,13 +53,13 @@ export default function JobsPage() {
 
   return (
     <AppShell
-      title="Jobs"
-      subtitle="Create and manage hiring jobs. Open a job to upload CVs, define criteria, and review shortlists."
+      title={t("title")}
+      subtitle={t("subtitle")}
       primaryAction={
         <Link href="/jobs/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" />
-            Create Job
+            {t("create")}
           </Button>
         </Link>
       }
@@ -76,19 +78,19 @@ export default function JobsPage() {
             </Card>
           ))
         ) : sortedJobs.length === 0 ? (
-          <Card className="border-border/80">
-            <CardHeader>
-              <CardTitle>No jobs yet</CardTitle>
-              <CardDescription>Create your first job to start uploading CVs and running shortlists.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href="/jobs/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Job
-                </Button>
-              </Link>
-            </CardContent>
+            <Card className="border-border/80">
+              <CardHeader>
+                <CardTitle>{t("emptyTitle")}</CardTitle>
+                <CardDescription>{t("emptySubtitle")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/jobs/new">
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t("create")}
+                  </Button>
+                </Link>
+              </CardContent>
           </Card>
         ) : (
           sortedJobs.map((job) => (
@@ -110,7 +112,7 @@ export default function JobsPage() {
                 </p>
                 <Link href={`/jobs/${job.id}?tab=upload`}>
                   <Button variant="outline">
-                    Open Workspace
+                    {t("openWorkspace")}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>

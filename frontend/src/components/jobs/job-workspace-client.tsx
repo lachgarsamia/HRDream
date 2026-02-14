@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Loader2, UploadCloud } from "lucide-react";
 import { Bar, BarChart, Brush, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
@@ -39,10 +41,12 @@ import {
   type RunResultItem,
   type RunResultsResponse,
 } from "@/lib/jobs";
+import { useSettingsStore } from "@/lib/settings";
 
 type WorkspaceTab = "upload" | "candidates" | "criteria" | "shortlist" | "exports";
 
 const TAB_ORDER: WorkspaceTab[] = ["upload", "candidates", "criteria", "shortlist", "exports"];
+const WARNING_FILTERS: WarningFilter[] = ["low_confidence_email", "low_confidence_phone", "missing_dates", "low_text_extraction", "ocr_needed"];
 
 type CriteriaState = {
   role_title: string;
@@ -129,6 +133,13 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const t = useTranslations("workspace");
+  const triggerConfetti = useSettingsStore((state) => state.triggerConfetti);
+  const triggerMagicHighlight = useSettingsStore((state) => state.triggerMagicHighlight);
+  const magicHighlightCount = useSettingsStore((state) => state.magicHighlightCount);
+  const reducedMotionSetting = useSettingsStore((state) => state.reducedMotion);
+  const prefersReducedMotion = useReducedMotion();
+  const reduceMotion = prefersReducedMotion || reducedMotionSetting;
   const tab = parseTab(searchParams.get("tab") ?? initialTab ?? null);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -378,6 +389,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
       toast.success("Shortlist run completed", {
         description: `Run #${run.id} scored ${run.included_candidate_count} candidates.`,
       });
+      triggerConfetti();
       await loadWorkspace();
       setTab("shortlist");
     } catch (caught) {
@@ -492,6 +504,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   };
 
   const toggleStatusFilter = (statusValue: ShortlistStatus) => {
+    triggerMagicHighlight();
     setSelectedStatuses((prev) => {
       if (prev.includes(statusValue)) {
         return prev.length === 1 ? prev : prev.filter((entry) => entry !== statusValue);
@@ -501,17 +514,20 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   };
 
   const toggleWarningFilter = (warning: WarningFilter) => {
+    triggerMagicHighlight();
     setSelectedWarnings((prev) =>
       prev.includes(warning) ? prev.filter((entry) => entry !== warning) : [...prev, warning]
     );
   };
 
   const applyKpiFilter = (statusValue: ShortlistStatus) => {
+    triggerMagicHighlight();
     setSelectedStatuses([statusValue]);
     setSegmentPreset("all");
   };
 
   const setScorePreset = (preset: "top10" | "ge70" | "ge80" | "zero" | "all") => {
+    triggerMagicHighlight();
     if (preset === "all") {
       setMinScore(0);
       setMaxScore(100);
@@ -635,7 +651,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
 
   if (loading) {
     return (
-      <AppShell title="Job workspace" subtitle="Loading workspace...">
+      <AppShell title="Job workspace" subtitle={t("loading")}>
         <div className="space-y-4">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-72 w-full" />
@@ -677,14 +693,14 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
       primaryAction={
         <Button onClick={runShortlist} disabled={isRunningShortlist || indexedCount === 0}>
           {isRunningShortlist ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Run Shortlist
+          {t("runShortlist")}
         </Button>
       }
     >
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Setup checklist</CardTitle>
+            <CardTitle className="text-base">{t("checklist")}</CardTitle>
             <CardDescription>Follow this sequence to keep results trustworthy and scoped to this job.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
@@ -708,7 +724,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
           <TabsList className="grid w-full grid-cols-5">
             {TAB_ORDER.map((item) => (
               <TabsTrigger key={item} value={item} className="capitalize">
-                {item}
+                {t(item)}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -1020,15 +1036,15 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
           <TabsContent value="shortlist" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Shortlist</CardTitle>
-                <CardDescription>Evidence-backed ranking for this job candidate pool only.</CardDescription>
+                <CardTitle>{t("shortlist")}</CardTitle>
+                <CardDescription>{t("shortlistSubtitle")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/60 px-4 py-3 shadow-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button onClick={runShortlist} disabled={isRunningShortlist || indexedCount === 0}>
                       {isRunningShortlist ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Run Shortlist
+                      {t("runShortlist")}
                     </Button>
                     <select
                       value={selectedRunId ?? ""}
@@ -1081,7 +1097,13 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                   </div>
                 ) : null}
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-4 shadow-sm">
+                <motion.div
+                  key={magicHighlightCount}
+                  initial={reduceMotion ? false : { boxShadow: "0 0 0 rgba(59,130,246,0)" }}
+                  animate={reduceMotion ? undefined : { boxShadow: ["0 0 0 rgba(59,130,246,0)", "0 0 0 2px rgba(59,130,246,0.12)", "0 0 0 rgba(59,130,246,0)"] }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                  className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-4 shadow-sm"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     {([
                       ["shortlisted", "Shortlisted"],
@@ -1150,7 +1172,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {(["low_confidence_email", "low_confidence_phone", "missing_dates", "low_text_extraction", "ocr_needed"] as WarningFilter[]).map((warning) => (
+                    {WARNING_FILTERS.map((warning) => (
                       <Button
                         key={warning}
                         size="sm"
@@ -1174,14 +1196,17 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                         key={presetValue}
                         size="sm"
                         variant={segmentPreset === presetValue ? "default" : "outline"}
-                        onClick={() => setSegmentPreset(presetValue)}
+                        onClick={() => {
+                          triggerMagicHighlight();
+                          setSegmentPreset(presetValue);
+                        }}
                         className="h-7"
                       >
                         {label}
                       </Button>
                     ))}
                   </div>
-                </div>
+                </motion.div>
 
                 {insightsOpen ? (
                   <div className="space-y-4 rounded-xl border border-border/60 bg-card/60 p-4 shadow-sm">

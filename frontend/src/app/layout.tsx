@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { Toaster } from "@/components/ui/sonner";
 
 const manrope = Manrope({ subsets: ["latin"] });
 
@@ -19,10 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${manrope.className} min-h-screen bg-background text-foreground`}>
-        <Providers>
-          {children}
-          <Toaster />
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

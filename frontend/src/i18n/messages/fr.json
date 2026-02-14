@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "jobs": "Postes",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter"
+  },
+  "shell": {
+    "workspace": "Espace de recrutement",
+    "commandPlaceholder": "Rechercher postes, candidats, runs, actions...",
+    "theme": "Thème",
+    "language": "Langue",
+    "settings": "Paramètres",
+    "profile": "Profil",
+    "openCommand": "Ouvrir la palette"
+  },
+  "jobs": {
+    "title": "Postes",
+    "subtitle": "Créez et gérez les postes. Ouvrez un poste pour importer des CV, définir les critères et réviser les shortlists.",
+    "create": "Créer un poste",
+    "emptyTitle": "Aucun poste",
+    "emptySubtitle": "Créez votre premier poste pour commencer à importer des CV et lancer des shortlists.",
+    "openWorkspace": "Ouvrir l'espace"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Personnalisez votre expérience.",
+    "appearance": "Apparence",
+    "language": "Langue",
+    "notifications": "Notifications",
+    "delight": "Effets",
+    "privacy": "Confidentialité et rétention",
+    "about": "À propos",
+    "reducedMotion": "Réduire les animations",
+    "density": "Densité",
+    "normal": "Normale",
+    "dense": "Dense",
+    "seasonal": "Effets saisonniers",
+    "trySnow": "Tester la neige",
+    "toasts": "Notifications toast",
+    "sound": "Son",
+    "privacyText": "Les CV sont conservés dans votre espace en développement. En production, la politique de rétention/suppression est configurable par client.",
+    "version": "Version"
+  },
+  "workspace": {
+    "upload": "Import",
+    "candidates": "Candidats",
+    "criteria": "Critères",
+    "shortlist": "Shortlist",
+    "exports": "Exports",
+    "checklist": "Checklist de configuration",
+    "runShortlist": "Lancer la shortlist",
+    "loading": "Chargement de l'espace...",
+    "shortlistSubtitle": "Classement avec preuves pour ce poste uniquement."
+  }
+}

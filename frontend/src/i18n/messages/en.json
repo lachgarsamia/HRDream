@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "jobs": "Jobs",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "shell": {
+    "workspace": "Hiring Workspace",
+    "commandPlaceholder": "Search jobs, candidates, runs, actions...",
+    "theme": "Theme",
+    "language": "Language",
+    "settings": "Settings",
+    "profile": "Profile",
+    "openCommand": "Open command palette"
+  },
+  "jobs": {
+    "title": "Jobs",
+    "subtitle": "Create and manage hiring jobs. Open a job to upload CVs, define criteria, and review shortlists.",
+    "create": "Create Job",
+    "emptyTitle": "No jobs yet",
+    "emptySubtitle": "Create your first job to start uploading CVs and running shortlists.",
+    "openWorkspace": "Open Workspace"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Personalize your workspace experience.",
+    "appearance": "Appearance",
+    "language": "Language",
+    "notifications": "Notifications",
+    "delight": "Fun and delight",
+    "privacy": "Privacy and retention",
+    "about": "About",
+    "reducedMotion": "Reduced motion",
+    "density": "Density",
+    "normal": "Normal",
+    "dense": "Dense",
+    "seasonal": "Seasonal effects",
+    "trySnow": "Try snow",
+    "toasts": "Toast notifications",
+    "sound": "Sound",
+    "privacyText": "Candidate files are retained within your workspace in development. Production retention and deletion policy can be configured per customer.",
+    "version": "Version"
+  },
+  "workspace": {
+    "upload": "Upload",
+    "candidates": "Candidates",
+    "criteria": "Criteria",
+    "shortlist": "Shortlist",
+    "exports": "Exports",
+    "checklist": "Setup checklist",
+    "runShortlist": "Run Shortlist",
+    "loading": "Loading workspace...",
+    "shortlistSubtitle": "Evidence-backed ranking for this job candidate pool only."
+  }
+}

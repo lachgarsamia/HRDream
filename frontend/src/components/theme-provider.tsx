@@ -1,49 +1,39 @@
 "use client";
 
-import * as React from "react";
-
-type Theme = "light" | "dark";
-
-type ThemeContextValue = {
-  theme: Theme;
-  setTheme: (value: Theme) => void;
-  toggleTheme: () => void;
-};
-
-const ThemeContext = React.createContext<ThemeContextValue | null>(null);
+import { ThemeProvider as NextThemeProvider, useTheme as useNextTheme } from "next-themes";
+import { useEffect } from "react";
+import { useSettingsStore } from "@/lib/settings";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<Theme>("light");
-
-  React.useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const nextTheme: Theme = stored ?? (prefersDark ? "dark" : "light");
-    setThemeState(nextTheme);
-    document.documentElement.classList.toggle("dark", nextTheme === "dark");
-  }, []);
-
-  const setTheme = React.useCallback((value: Theme) => {
-    setThemeState(value);
-    localStorage.setItem("theme", value);
-    document.documentElement.classList.toggle("dark", value === "dark");
-  }, []);
-
-  const toggleTheme = React.useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }, [setTheme, theme]);
-
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <NextThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       {children}
-    </ThemeContext.Provider>
+    </NextThemeProvider>
   );
 }
 
 export function useTheme() {
-  const context = React.useContext(ThemeContext);
-  if (!context) {
-    throw new Error("useTheme must be used within ThemeProvider");
-  }
-  return context;
+  const { theme, setTheme, resolvedTheme } = useNextTheme();
+  const storedPreference = useSettingsStore((state) => state.themePreference);
+  const setThemePreference = useSettingsStore((state) => state.setThemePreference);
+
+  useEffect(() => {
+    if (!theme || theme === storedPreference) return;
+    if (theme === "light" || theme === "dark" || theme === "system") {
+      setThemePreference(theme);
+    }
+  }, [setThemePreference, storedPreference, theme]);
+
+  useEffect(() => {
+    if (storedPreference && storedPreference !== theme) {
+      setTheme(storedPreference);
+    }
+  }, [setTheme, storedPreference, theme]);
+
+  return {
+    theme: (theme as "light" | "dark" | "system" | undefined) ?? "system",
+    resolvedTheme: (resolvedTheme as "light" | "dark" | undefined) ?? "light",
+    setTheme,
+    toggleTheme: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+  };
 }
