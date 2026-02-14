@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Loader2, UploadCloud } from "lucide-react";
+import { Bar, BarChart, Brush, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
@@ -54,6 +55,19 @@ type CriteriaState = {
   reject_if_min_exp_not_met: boolean;
 };
 
+type ShortlistStatus = "shortlisted" | "undecided" | "rejected";
+type WarningFilter = "low_confidence_email" | "low_confidence_phone" | "missing_dates" | "low_text_extraction" | "ocr_needed";
+type SegmentationPreset = "all" | "passing" | "hard_rejected" | "top_matches";
+
+type ShortlistRowView = {
+  row: RunResultItem;
+  candidate: JobCandidate | null;
+  mustHaveCoverage: number;
+  warnings: string[];
+  hardFilterFailed: boolean;
+  reason: string | null;
+};
+
 function parseTab(value: string | null): WorkspaceTab {
   if (value === "upload" || value === "candidates" || value === "criteria" || value === "shortlist" || value === "exports") {
     return value;
@@ -75,6 +89,21 @@ function getErrorMessage(error: ApiError | null): string {
   if (error.status === 404) return "Job not found.";
   if (error.status === 422) return "Request invalid. Please refresh the page.";
   return "Something went wrong while loading this job.";
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
 }
 
 function confidenceBadge(confidence: number | null | undefined) {
@@ -111,6 +140,15 @@ export default function JobWorkspacePage() {
   const [runResults, setRunResults] = useState<RunResultsResponse | null>(null);
   const [runExportStatus, setRunExportStatus] = useState<{ csv_ready: boolean; pdf_ready: boolean; reason?: string } | null>(null);
   const [selectedResult, setSelectedResult] = useState<RunResultItem | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<ShortlistStatus[]>(["shortlisted", "undecided", "rejected"]);
+  const [minScore, setMinScore] = useState(0);
+  const [maxScore, setMaxScore] = useState(100);
+  const [selectedWarnings, setSelectedWarnings] = useState<WarningFilter[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [denseMode, setDenseMode] = useState(false);
+  const [segmentPreset, setSegmentPreset] = useState<SegmentationPreset>("all");
+  const [selectedScoreIds, setSelectedScoreIds] = useState<number[]>([]);
+  const [insightsOpen, setInsightsOpen] = useState(true);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
@@ -146,6 +184,7 @@ export default function JobWorkspacePage() {
     setRunResults(data);
     setRunExportStatus(exportStatus);
     setSelectedRunId(runId);
+    setSelectedScoreIds([]);
   }, []);
 
   const loadWorkspace = useCallback(async () => {
@@ -262,7 +301,10 @@ export default function JobWorkspacePage() {
 
   const runInputSummary = runResults?.provenance;
 
-  const candidateForResult = (result: RunResultItem) => candidates.find((candidate) => candidate.id === result.candidate_id) ?? null;
+  const candidateForResult = useCallback(
+    (result: RunResultItem) => candidates.find((candidate) => candidate.id === result.candidate_id) ?? null,
+    [candidates]
+  );
 
   const uploadPickedFiles = async () => {
     if (selectedFiles.length === 0) {
@@ -346,13 +388,220 @@ export default function JobWorkspacePage() {
     }
   };
 
-  const shortlistRows = runResults?.items ?? [];
+  const shortlistRows = useMemo(() => runResults?.items ?? [], [runResults]);
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
+
+  const shortlistViews = useMemo<ShortlistRowView[]>(
+    () =>
+      shortlistRows.map((row) => {
+        const candidate = candidateForResult(row);
+        const warnings = candidate?.parsing_warnings_json?.items ?? candidate?.warnings_json?.items ?? [];
+        const reason = row.breakdown_json?.reason ?? null;
+        const hardFilterFailed =
+          row.decision === "rejected" &&
+          ((row.breakdown_json?.missing_must_have?.length ?? 0) > 0 || (reason?.toLowerCase().includes("hard filter") ?? false));
+
+        return {
+          row,
+          candidate,
+          mustHaveCoverage: Math.round(row.breakdown_json?.breakdown?.skills ?? 0),
+          warnings,
+          hardFilterFailed,
+          reason,
+        };
+      }),
+    [candidateForResult, shortlistRows]
+  );
+
+  const statusCounts = useMemo<Record<ShortlistStatus, number>>(
+    () => ({
+      shortlisted: shortlistViews.filter((item) => item.row.decision === "shortlisted").length,
+      undecided: shortlistViews.filter((item) => item.row.decision === "undecided").length,
+      rejected: shortlistViews.filter((item) => item.row.decision === "rejected").length,
+    }),
+    [shortlistViews]
+  );
+
+  const filteredShortlistViews = useMemo(() => {
+    const filtered = shortlistViews.filter((item) => {
+      const rowStatus = item.row.decision as ShortlistStatus;
+      if (!selectedStatuses.includes(rowStatus)) return false;
+      if (item.row.total_score < minScore || item.row.total_score > maxScore) return false;
+      if (searchText) {
+        const haystack = `${item.row.full_name} ${item.row.email ?? ""} ${item.row.phone ?? ""} ${item.row.location ?? ""}`.toLowerCase();
+        if (!haystack.includes(searchText.toLowerCase())) return false;
+      }
+      if (selectedWarnings.length > 0 && !selectedWarnings.every((warning) => item.warnings.includes(warning))) {
+        return false;
+      }
+      if (segmentPreset === "passing" && item.row.decision === "rejected") return false;
+      if (segmentPreset === "hard_rejected" && !item.hardFilterFailed) return false;
+      if (segmentPreset === "top_matches" && item.row.total_score < 80) return false;
+      return true;
+    });
+    return filtered;
+  }, [shortlistViews, selectedStatuses, minScore, maxScore, searchText, selectedWarnings, segmentPreset]);
+
+  const histogramData = useMemo(() => {
+    const bins = Array.from({ length: 10 }, (_, index) => ({
+      bucket: `${index * 10}-${index * 10 + 9}`,
+      from: index * 10,
+      to: index * 10 + 9,
+      count: 0,
+    }));
+    for (const item of filteredShortlistViews) {
+      const safeScore = Math.max(0, Math.min(99, Math.floor(item.row.total_score)));
+      const bucketIndex = Math.floor(safeScore / 10);
+      bins[bucketIndex].count += 1;
+    }
+    return bins;
+  }, [filteredShortlistViews]);
+
+  const statusChartData = useMemo(
+    () => [
+      { name: "Shortlisted", value: filteredShortlistViews.filter((item) => item.row.decision === "shortlisted").length, key: "shortlisted" as ShortlistStatus },
+      { name: "Undecided", value: filteredShortlistViews.filter((item) => item.row.decision === "undecided").length, key: "undecided" as ShortlistStatus },
+      { name: "Rejected", value: filteredShortlistViews.filter((item) => item.row.decision === "rejected").length, key: "rejected" as ShortlistStatus },
+    ],
+    [filteredShortlistViews]
+  );
+
+  const warningRate = useMemo(() => {
+    if (filteredShortlistViews.length === 0) return 0;
+    const withWarnings = filteredShortlistViews.filter((item) => item.warnings.length > 0).length;
+    return (withWarnings / filteredShortlistViews.length) * 100;
+  }, [filteredShortlistViews]);
+
+  const evidenceCoverageAverage = useMemo(() => {
+    if (filteredShortlistViews.length === 0) return 0;
+    const reasonsPresent = filteredShortlistViews.filter((item) => Boolean(item.reason) || (item.row.breakdown_json?.missing_must_have?.length ?? 0) > 0).length;
+    return (reasonsPresent / filteredShortlistViews.length) * 100;
+  }, [filteredShortlistViews]);
+
+  const scores = filteredShortlistViews.map((item) => item.row.total_score);
+  const selectedRows = useMemo(
+    () => filteredShortlistViews.filter((item) => selectedScoreIds.includes(item.row.score_id)),
+    [filteredShortlistViews, selectedScoreIds]
+  );
 
   const copyValue = async (value: string | null | undefined) => {
     if (!value) return;
     await navigator.clipboard.writeText(value);
     toast.success("Copied to clipboard");
+  };
+
+  const toggleStatusFilter = (statusValue: ShortlistStatus) => {
+    setSelectedStatuses((prev) => {
+      if (prev.includes(statusValue)) {
+        return prev.length === 1 ? prev : prev.filter((entry) => entry !== statusValue);
+      }
+      return [...prev, statusValue];
+    });
+  };
+
+  const toggleWarningFilter = (warning: WarningFilter) => {
+    setSelectedWarnings((prev) =>
+      prev.includes(warning) ? prev.filter((entry) => entry !== warning) : [...prev, warning]
+    );
+  };
+
+  const applyKpiFilter = (statusValue: ShortlistStatus) => {
+    setSelectedStatuses([statusValue]);
+    setSegmentPreset("all");
+  };
+
+  const setScorePreset = (preset: "top10" | "ge70" | "ge80" | "zero" | "all") => {
+    if (preset === "all") {
+      setMinScore(0);
+      setMaxScore(100);
+      return;
+    }
+    if (preset === "zero") {
+      setMinScore(0);
+      setMaxScore(0);
+      return;
+    }
+    if (preset === "ge70") {
+      setMinScore(70);
+      setMaxScore(100);
+      return;
+    }
+    if (preset === "ge80") {
+      setMinScore(80);
+      setMaxScore(100);
+      return;
+    }
+    const sorted = [...shortlistViews].sort((a, b) => b.row.total_score - a.row.total_score);
+    if (sorted.length === 0) return;
+    const cutoffIndex = Math.max(0, Math.floor(sorted.length * 0.1) - 1);
+    setMinScore(Math.floor(sorted[cutoffIndex].row.total_score));
+    setMaxScore(100);
+  };
+
+  const toggleRowSelection = (scoreId: number) => {
+    setSelectedScoreIds((prev) =>
+      prev.includes(scoreId) ? prev.filter((id) => id !== scoreId) : [...prev, scoreId]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIds = filteredShortlistViews.map((item) => item.row.score_id);
+    const allSelected = visibleIds.every((id) => selectedScoreIds.includes(id));
+    if (allSelected) {
+      setSelectedScoreIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    setSelectedScoreIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+  };
+
+  const applyBulkDecision = (decision: "shortlisted" | "rejected" | "reviewed") => {
+    if (selectedRows.length === 0 || !runResults) return;
+    const label = decision === "reviewed" ? "mark as reviewed" : `mark as ${decision}`;
+    if (!window.confirm(`Apply '${label}' to ${selectedRows.length} candidates?`)) return;
+
+    const updatedRows = runResults.items.map((entry) => {
+      if (!selectedScoreIds.includes(entry.score_id)) return entry;
+      if (decision === "reviewed") {
+        return {
+          ...entry,
+          breakdown_json: {
+            ...entry.breakdown_json,
+            reason: entry.breakdown_json?.reason || "Marked as reviewed",
+          },
+        };
+      }
+      return { ...entry, decision };
+    });
+    setRunResults({ ...runResults, items: updatedRows });
+    setSelectedScoreIds([]);
+    toast.success(`Updated ${selectedRows.length} candidates`);
+  };
+
+  const exportSelectedCsv = () => {
+    if (selectedRows.length === 0) return;
+    const headers = ["Name", "Email", "Phone", "Location", "Experience", "Status", "Score"];
+    const lines = selectedRows.map((item) =>
+      [
+        item.row.full_name,
+        item.row.email ?? "",
+        item.row.phone ?? "",
+        item.row.location ?? "",
+        item.row.years_experience_est ?? "",
+        item.row.decision,
+        item.row.total_score.toFixed(1),
+      ]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `shortlist_selected_run_${selectedRunId ?? "latest"}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedRows.length} selected rows`);
   };
 
   const exportCsv = async () => {
@@ -796,6 +1045,10 @@ export default function JobWorkspacePage() {
                       </option>
                     ))}
                   </select>
+                  <label className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+                    <input type="checkbox" checked={denseMode} onChange={(event) => setDenseMode(event.target.checked)} />
+                    Dense mode
+                  </label>
                 </div>
 
                 {runInputSummary ? (
@@ -809,6 +1062,226 @@ export default function JobWorkspacePage() {
                   </div>
                 ) : null}
 
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm">Control strip</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {([
+                        ["shortlisted", "Shortlisted"],
+                        ["undecided", "Undecided"],
+                        ["rejected", "Rejected"],
+                      ] as [ShortlistStatus, string][]).map(([statusValue, label]) => (
+                        <Button
+                          key={statusValue}
+                          size="sm"
+                          variant={selectedStatuses.includes(statusValue) ? "default" : "outline"}
+                          onClick={() => toggleStatusFilter(statusValue)}
+                        >
+                          {label} ({statusCounts[statusValue]})
+                        </Button>
+                      ))}
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="min-score">Min score</Label>
+                        <Input
+                          id="min-score"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={minScore}
+                          onChange={(event) => setMinScore(Math.max(0, Math.min(100, Number(event.target.value || 0))))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="max-score">Max score</Label>
+                        <Input
+                          id="max-score"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={maxScore}
+                          onChange={(event) => setMaxScore(Math.max(0, Math.min(100, Number(event.target.value || 100))))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="search-candidates">Search</Label>
+                        <Input
+                          id="search-candidates"
+                          placeholder="Search name/email/phone/location"
+                          value={searchText}
+                          onChange={(event) => setSearchText(event.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Score presets:</span>
+                      <Button size="sm" variant="outline" onClick={() => setScorePreset("top10")}>Top 10%</Button>
+                      <Button size="sm" variant="outline" onClick={() => setScorePreset("ge70")}>≥ 70</Button>
+                      <Button size="sm" variant="outline" onClick={() => setScorePreset("ge80")}>≥ 80</Button>
+                      <Button size="sm" variant="outline" onClick={() => setScorePreset("zero")}>= 0</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setScorePreset("all")}>Reset</Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(["low_confidence_email", "low_confidence_phone", "missing_dates", "low_text_extraction", "ocr_needed"] as WarningFilter[]).map((warning) => (
+                        <Button
+                          key={warning}
+                          size="sm"
+                          variant={selectedWarnings.includes(warning) ? "default" : "outline"}
+                          onClick={() => toggleWarningFilter(warning)}
+                        >
+                          {warning}
+                        </Button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        ["all", "All"],
+                        ["passing", "Passing Hard Filters"],
+                        ["hard_rejected", "Rejected by Hard Filters"],
+                        ["top_matches", "Top Matches"],
+                      ] as [SegmentationPreset, string][]).map(([presetValue, label]) => (
+                        <Button
+                          key={presetValue}
+                          size="sm"
+                          variant={segmentPreset === presetValue ? "default" : "outline"}
+                          onClick={() => setSegmentPreset(presetValue)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between px-0 hover:bg-transparent"
+                      onClick={() => setInsightsOpen((value) => !value)}
+                    >
+                      <span className="text-sm font-semibold">Insights</span>
+                      {insightsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                  </CardHeader>
+                  {insightsOpen ? (
+                    <CardContent className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <button type="button" onClick={() => { setSegmentPreset("all"); setSelectedStatuses(["shortlisted", "undecided", "rejected"]); }} className="rounded-lg border p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Total</p>
+                          <p className="text-xl font-semibold">{filteredShortlistViews.length}</p>
+                        </button>
+                        <button type="button" onClick={() => applyKpiFilter("shortlisted")} className="rounded-lg border p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Shortlisted</p>
+                          <p className="text-xl font-semibold">{statusChartData.find((entry) => entry.key === "shortlisted")?.value ?? 0}</p>
+                        </button>
+                        <button type="button" onClick={() => applyKpiFilter("undecided")} className="rounded-lg border p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Undecided</p>
+                          <p className="text-xl font-semibold">{statusChartData.find((entry) => entry.key === "undecided")?.value ?? 0}</p>
+                        </button>
+                        <button type="button" onClick={() => applyKpiFilter("rejected")} className="rounded-lg border p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Rejected</p>
+                          <p className="text-xl font-semibold">{statusChartData.find((entry) => entry.key === "rejected")?.value ?? 0}</p>
+                        </button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-lg border p-3">
+                          <p className="text-xs text-muted-foreground">Avg / Median score</p>
+                          <p className="text-lg font-semibold">{average(scores).toFixed(1)} / {median(scores).toFixed(1)}</p>
+                        </div>
+                        <div className="rounded-lg border p-3">
+                          <p className="text-xs text-muted-foreground">Parsing warnings</p>
+                          <p className="text-lg font-semibold">{warningRate.toFixed(1)}%</p>
+                        </div>
+                        <div className="rounded-lg border p-3">
+                          <p className="text-xs text-muted-foreground">Evidence coverage</p>
+                          <p className="text-lg font-semibold">{evidenceCoverageAverage.toFixed(1)}%</p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="h-64 rounded-lg border p-3">
+                          <p className="mb-2 text-xs text-muted-foreground">Score distribution</p>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={histogramData}>
+                              <XAxis dataKey="bucket" fontSize={11} />
+                              <YAxis allowDecimals={false} fontSize={11} />
+                              <Tooltip />
+                              <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                              <Brush
+                                dataKey="bucket"
+                                height={20}
+                                travellerWidth={10}
+                                onChange={(range) => {
+                                  if (!range) return;
+                                  const start = typeof range.startIndex === "number" ? range.startIndex : 0;
+                                  const end = typeof range.endIndex === "number" ? range.endIndex : histogramData.length - 1;
+                                  const from = histogramData[start]?.from ?? 0;
+                                  const to = histogramData[end]?.to ?? 100;
+                                  setMinScore(from);
+                                  setMaxScore(to);
+                                }}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="h-64 rounded-lg border p-3">
+                          <p className="mb-2 text-xs text-muted-foreground">Status breakdown</p>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={statusChartData}
+                                dataKey="value"
+                                nameKey="name"
+                                innerRadius={55}
+                                outerRadius={82}
+                                onClick={(slice) => {
+                                  if (!slice || typeof slice !== "object" || !("key" in slice)) return;
+                                  applyKpiFilter((slice as { key: ShortlistStatus }).key);
+                                }}
+                              >
+                                {statusChartData.map((entry) => (
+                                  <Cell
+                                    key={entry.key}
+                                    fill={
+                                      entry.key === "shortlisted"
+                                        ? "hsl(160 65% 40%)"
+                                        : entry.key === "undecided"
+                                          ? "hsl(var(--primary))"
+                                          : "hsl(0 72% 55%)"
+                                    }
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </CardContent>
+                  ) : null}
+                </Card>
+
+                {selectedRows.length > 0 ? (
+                  <Card className="border-primary/30 bg-primary/5">
+                    <CardContent className="flex flex-wrap items-center gap-2 p-3">
+                      <p className="text-sm font-medium">{selectedRows.length} selected</p>
+                      <Button size="sm" onClick={() => applyBulkDecision("shortlisted")}>Shortlist selected</Button>
+                      <Button size="sm" variant="destructive" onClick={() => applyBulkDecision("rejected")}>Reject selected</Button>
+                      <Button size="sm" variant="outline" onClick={() => applyBulkDecision("reviewed")}>Mark reviewed</Button>
+                      <Button size="sm" variant="outline" onClick={exportSelectedCsv}>Export selected</Button>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
                 {shortlistRows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No shortlist results yet.</p>
                 ) : (
@@ -816,6 +1289,16 @@ export default function JobWorkspacePage() {
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-muted/50 text-left">
                         <tr>
+                          <th className="p-3">
+                            <input
+                              type="checkbox"
+                              checked={
+                                filteredShortlistViews.length > 0 &&
+                                filteredShortlistViews.every((item) => selectedScoreIds.includes(item.row.score_id))
+                              }
+                              onChange={toggleSelectAllVisible}
+                            />
+                          </th>
                           <th className="p-3">Name</th>
                           <th className="p-3">Email</th>
                           <th className="p-3">Phone</th>
@@ -828,15 +1311,21 @@ export default function JobWorkspacePage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {shortlistRows.map((row) => {
-                          const candidate = candidateForResult(row);
-                          const mustHaveCoverage = Math.round(row.breakdown_json?.breakdown?.skills ?? 0);
+                        {filteredShortlistViews.map((item) => {
+                          const { row, candidate, mustHaveCoverage, hardFilterFailed, reason } = item;
                           return (
                             <tr
                               key={row.score_id}
                               className="cursor-pointer border-t border-border/70 hover:bg-muted/30"
                               onClick={() => setSelectedResult(row)}
                             >
+                              <td className={`p-3 ${denseMode ? "py-1.5" : ""}`} onClick={(event) => event.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedScoreIds.includes(row.score_id)}
+                                  onChange={() => toggleRowSelection(row.score_id)}
+                                />
+                              </td>
                               <td className="p-3 font-medium">{row.full_name}</td>
                               <td className="p-3">{row.email || "-"}</td>
                               <td className="p-3">{row.phone || "-"}</td>
@@ -854,12 +1343,28 @@ export default function JobWorkspacePage() {
                                 </div>
                               </td>
                               <td className="p-3">
-                                <Badge variant={row.decision === "shortlisted" ? "default" : row.decision === "rejected" ? "destructive" : "outline"}>
-                                  {row.decision}
-                                </Badge>
+                                <div className="flex flex-wrap gap-1">
+                                  <Badge variant={row.decision === "shortlisted" ? "default" : row.decision === "rejected" ? "destructive" : "outline"}>
+                                    {row.decision}
+                                  </Badge>
+                                  {hardFilterFailed ? (
+                                    <Badge variant="outline" title={reason || "Rejected by hard filters"}>
+                                      Hard filter failed
+                                    </Badge>
+                                  ) : null}
+                                </div>
                               </td>
-                              <td className="p-3 font-semibold">{row.total_score.toFixed(1)}</td>
-                              {candidate ? null : null}
+                              <td className="p-3">
+                                <div className="space-y-1">
+                                  <div className="h-1.5 w-20 rounded bg-muted">
+                                    <div
+                                      className="h-full rounded bg-primary transition-all duration-200"
+                                      style={{ width: `${Math.max(0, Math.min(100, row.total_score))}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs font-semibold">{row.total_score.toFixed(1)}</p>
+                                </div>
+                              </td>
                             </tr>
                           );
                         })}
