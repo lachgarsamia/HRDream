@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
-import { useSettingsStore } from "@/lib/settings";
+import { type ThemePreference, useSettingsStore } from "@/lib/settings";
 
 type AppShellProps = {
   title: string;
@@ -42,7 +42,7 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, mounted } = useTheme();
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
   const density = useSettingsStore((state) => state.density);
@@ -133,13 +133,24 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="icon" className="h-9 w-9">
-                      {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                      {!mounted ? (
+                        <Monitor className="h-4 w-4" />
+                      ) : theme === "dark" ? (
+                        <Moon className="h-4 w-4" />
+                      ) : theme === "light" ? (
+                        <Sun className="h-4 w-4" />
+                      ) : (
+                        <Monitor className="h-4 w-4" />
+                      )}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40">
                     <DropdownMenuLabel>{tShell("theme")}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value)}>
+                    <DropdownMenuRadioGroup
+                      value={theme}
+                      onValueChange={(value) => setTheme(value as ThemePreference)}
+                    >
                       <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>

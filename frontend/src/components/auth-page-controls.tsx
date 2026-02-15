@@ -13,10 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/components/theme-provider";
-import { useSettingsStore } from "@/lib/settings";
+import { type ThemePreference, useSettingsStore } from "@/lib/settings";
 
 export function AuthPageControls() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, mounted } = useTheme();
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
 
@@ -25,13 +25,21 @@ export function AuthPageControls() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon" className="h-9 w-9">
-            {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+            {!mounted ? (
+              <Monitor className="h-4 w-4" />
+            ) : theme === "dark" ? (
+              <Moon className="h-4 w-4" />
+            ) : theme === "light" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Monitor className="h-4 w-4" />
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-36">
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value)}>
+          <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as ThemePreference)}>
             <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
