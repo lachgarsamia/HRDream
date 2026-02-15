@@ -1,4 +1,4 @@
-import { apiDownload, apiFetch, apiUpload } from "./api";
+import { apiDownload, apiFetch, apiFetchBlob, apiUpload } from "./api";
 
 export interface Job {
   id: number;
@@ -76,6 +76,13 @@ export interface JobCandidateListResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface JobCandidateDetail extends JobCandidate {
+  structured_json: Record<string, unknown> | null;
+  file_name: string;
+  file_mime_type: string;
+  cv_available: boolean;
 }
 
 export interface UploadResponse {
@@ -254,6 +261,10 @@ export async function getJobCandidates(jobId: number, page: number = 1, pageSize
   return apiFetch<JobCandidateListResponse>(`/jobs/${jobId}/candidates?page=${page}&page_size=${pageSize}`);
 }
 
+export async function getJobCandidateDetails(jobId: number, candidateId: number): Promise<JobCandidateDetail> {
+  return apiFetch<JobCandidateDetail>(`/jobs/${jobId}/candidates/${candidateId}`);
+}
+
 export async function saveJobCriteria(jobId: number, criteria_json: Record<string, unknown>): Promise<{
   role_id: number;
   project_id: number;
@@ -296,6 +307,10 @@ export async function downloadRunCsv(runId: number): Promise<void> {
 
 export async function downloadRunPdf(runId: number): Promise<void> {
   await downloadRunBinary(runId, "report.pdf", `shortlist_report_run_${runId}.pdf`);
+}
+
+export async function fetchCandidateCvBlob(jobId: number, candidateId: number): Promise<Blob> {
+  return apiFetchBlob(`/jobs/${jobId}/candidates/${candidateId}/cv`);
 }
 
 export async function saveRoleIntake(projectId: number, payload: RoleIntakePayload): Promise<RoleIntakeResponse> {

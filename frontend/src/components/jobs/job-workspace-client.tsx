@@ -3,30 +3,35 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Loader2, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Loader2, MoreVertical, Trash2, UploadCloud } from "lucide-react";
 import { Bar, BarChart, Brush, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { FilePickerButton } from "@/components/jobs/file-picker-button";
+import { CandidateDetailDrawer } from "@/components/jobs/candidate-detail-drawer";
+import { DeleteJobDialog } from "@/components/jobs/delete-job-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { ApiError } from "@/lib/api";
 import {
   createJobRun,
+  deleteJob,
   downloadRunCsv,
   downloadRunPdf,
+  fetchCandidateCvBlob,
   getJob,
+  getJobCandidateDetails,
   getJobCandidates,
   getRunExportStatus,
   getJobFiles,
@@ -36,12 +41,14 @@ import {
   uploadJobFiles,
   type Job,
   type JobCandidate,
+  type JobCandidateDetail,
   type JobFile,
   type RunListItem,
   type RunResultItem,
   type RunResultsResponse,
 } from "@/lib/jobs";
 import { useSettingsStore } from "@/lib/settings";
+import { useTypingPulse } from "@/hooks/use-typing-pulse";
 
 type WorkspaceTab = "upload" | "candidates" | "criteria" | "shortlist" | "exports";
 
@@ -141,6 +148,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   const reducedMotionSetting = useSettingsStore((state) => state.reducedMotion);
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = prefersReducedMotion || reducedMotionSetting;
+  const { pulsing: searchPulsing, onType: onSearchType } = useTypingPulse(500);
   const tab = parseTab(searchParams.get("tab") ?? initialTab ?? null);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -153,6 +161,8 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   const [runResults, setRunResults] = useState<RunResultsResponse | null>(null);
   const [runExportStatus, setRunExportStatus] = useState<{ csv_ready: boolean; pdf_ready: boolean; reason?: string } | null>(null);
   const [selectedResult, setSelectedResult] = useState<RunResultItem | null>(null);
+  const [selectedCandidateDetail, setSelectedCandidateDetail] = useState<JobCandidateDetail | null>(null);
+  const [isCandidateDetailLoading, setIsCandidateDetailLoading] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<ShortlistStatus[]>(["shortlisted", "undecided", "rejected"]);
   const [minScore, setMinScore] = useState(0);
   const [maxScore, setMaxScore] = useState(100);
@@ -170,6 +180,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   const [isRunningShortlist, setIsRunningShortlist] = useState(false);
   const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isRunResultsLoading, setIsRunResultsLoading] = useState(false);
   const [criteriaSavedAt, setCriteriaSavedAt] = useState<string | null>(null);
 
   const [criteria, setCriteria] = useState<CriteriaState>({
@@ -190,14 +201,19 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   }, [pathname, router, searchParams]);
 
   const loadRunResults = useCallback(async (runId: number) => {
-    const [data, exportStatus] = await Promise.all([
-      getRunResults(runId),
-      getRunExportStatus(runId),
-    ]);
-    setRunResults(data);
-    setRunExportStatus(exportStatus);
-    setSelectedRunId(runId);
-    setSelectedScoreIds([]);
+    try {
+      setIsRunResultsLoading(true);
+      const [data, exportStatus] = await Promise.all([
+        getRunResults(runId),
+        getRunExportStatus(runId),
+      ]);
+      setRunResults(data);
+      setRunExportStatus(exportStatus);
+      setSelectedRunId(runId);
+      setSelectedScoreIds([]);
+    } finally {
+      setIsRunResultsLoading(false);
+    }
   }, []);
 
   const loadWorkspace = useCallback(async () => {
@@ -504,6 +520,46 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
     toast.success("Copied to clipboard");
   };
 
+  const openCandidateDetail = async (result: RunResultItem) => {
+    setSelectedResult(result);
+    setSelectedCandidateDetail(null);
+    setIsCandidateDetailLoading(true);
+    try {
+      const detail = await getJobCandidateDetails(jobId, result.candidate_id);
+      setSelectedCandidateDetail(detail);
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      toast.error("Unable to load candidate details", { description: apiError?.detail || "Try again." });
+    } finally {
+      setIsCandidateDetailLoading(false);
+    }
+  };
+
+  const openCandidateCv = async (download = false) => {
+    if (!selectedResult) return;
+    try {
+      const blob = await fetchCandidateCvBlob(jobId, selectedResult.candidate_id);
+      const url = URL.createObjectURL(blob);
+      if (download) {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = selectedCandidateDetail?.file_name || `${selectedResult.full_name}.pdf`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      } else {
+        const popup = window.open(url, "_blank", "noopener,noreferrer");
+        if (!popup) {
+          toast.error("Popup blocked", { description: "Allow popups to view the CV in a new tab." });
+        }
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      toast.error("Unable to open CV", { description: apiError?.detail || "CV is unavailable." });
+    }
+  };
+
   const toggleStatusFilter = (statusValue: ShortlistStatus) => {
     triggerMagicHighlight();
     setSelectedStatuses((prev) => {
@@ -593,6 +649,17 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
     setRunResults({ ...runResults, items: updatedRows });
     setSelectedScoreIds([]);
     toast.success(`Updated ${selectedRows.length} candidates`);
+  };
+
+  const updateSingleDecision = (decision: "shortlisted" | "undecided" | "rejected") => {
+    if (!selectedResult || !runResults) return;
+    const nextItems = runResults.items.map((entry) =>
+      entry.score_id === selectedResult.score_id ? { ...entry, decision } : entry
+    );
+    const updated = nextItems.find((entry) => entry.score_id === selectedResult.score_id) ?? null;
+    setRunResults({ ...runResults, items: nextItems });
+    if (updated) setSelectedResult(updated);
+    toast.success(`Candidate marked ${decision}`);
   };
 
   const exportSelectedCsv = () => {
@@ -692,10 +759,36 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
       contextLabel="Job"
       contextValue={`#${job.id}`}
       primaryAction={
-        <Button onClick={runShortlist} disabled={isRunningShortlist || indexedCount === 0}>
-          {isRunningShortlist ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {t("runShortlist")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={runShortlist} disabled={isRunningShortlist || indexedCount === 0}>
+            {isRunningShortlist ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {t("runShortlist")}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="icon" variant="outline" className="h-10 w-10">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1">
+              <DeleteJobDialog
+                jobId={job.id}
+                jobName={job.name}
+                candidateCount={candidates.length}
+                onConfirm={async () => {
+                  await deleteJob(job.id);
+                  router.push("/jobs");
+                }}
+                trigger={
+                  <button type="button" className="flex h-8 w-full items-center rounded-sm px-2 text-left text-sm text-destructive hover:bg-accent">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete job
+                  </button>
+                }
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       }
     >
       <div className="space-y-6">
@@ -1166,9 +1259,16 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                       <Input
                         id="search-candidates"
                         placeholder="Name, email, phone, location"
-                        className="h-9"
+                        className={`h-9 transition-all duration-200 ${
+                          typingAmbience && !reduceMotion && searchPulsing
+                            ? "ring-2 ring-primary/40 shadow-[0_0_0_6px_rgba(99,102,241,0.2),0_8px_22px_-14px_rgba(79,70,229,0.7)]"
+                            : ""
+                        }`}
                         value={searchText}
-                        onChange={(event) => setSearchText(event.target.value)}
+                        onChange={(event) => {
+                          if (typingAmbience && !reduceMotion) onSearchType();
+                          setSearchText(event.target.value);
+                        }}
                       />
                     </div>
                   </div>
@@ -1221,8 +1321,17 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
 
                 {insightsOpen ? (
                   <div className="space-y-4 rounded-xl border border-border/60 bg-card/60 p-4 shadow-sm">
-                    {filteredShortlistViews.length === 0 ? (
+                    {isRunResultsLoading ? (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                          <Skeleton key={index} className="h-24 w-full" />
+                        ))}
+                        <Skeleton className="h-[220px] xl:col-span-8" />
+                        <Skeleton className="h-[220px] xl:col-span-4" />
+                      </div>
+                    ) : filteredShortlistViews.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center">
+                        <div className="mx-auto mb-3 h-10 w-10 rounded-full border border-border/80 bg-muted/40" />
                         <p className="text-sm font-medium">Run shortlist to see distribution insights</p>
                         <p className="text-xs text-muted-foreground">Charts and KPI cards appear when this run has results.</p>
                       </div>
@@ -1287,7 +1396,13 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                                     background: "hsl(var(--background))",
                                   }}
                                 />
-                                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                                <Bar
+                                  dataKey="count"
+                                  fill="hsl(var(--primary))"
+                                  radius={[3, 3, 0, 0]}
+                                  isAnimationActive={!reduceMotion}
+                                  animationDuration={220}
+                                />
                                 <Brush
                                   dataKey="bucket"
                                   height={16}
@@ -1318,6 +1433,8 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                                   innerRadius={46}
                                   outerRadius={74}
                                   paddingAngle={2}
+                                  isAnimationActive={!reduceMotion}
+                                  animationDuration={220}
                                   onClick={(slice) => {
                                     if (!slice || typeof slice !== "object" || !("key" in slice)) return;
                                     applyKpiFilter((slice as { key: ShortlistStatus }).key);
@@ -1399,7 +1516,9 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                             <tr
                               key={row.score_id}
                               className="cursor-pointer border-t border-border/70 hover:bg-muted/30"
-                              onClick={() => setSelectedResult(row)}
+                              onClick={() => {
+                                void openCandidateDetail(row);
+                              }}
                             >
                               <td className={`p-3 ${denseMode ? "py-1.5" : ""}`} onClick={(event) => event.stopPropagation()}>
                                 <input
@@ -1516,80 +1635,28 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
         </Tabs>
       </div>
 
-      <Sheet open={Boolean(selectedResult)} onOpenChange={(open) => !open && setSelectedResult(null)}>
-        <SheetContent className="w-[460px] sm:w-[560px]">
-          <SheetHeader>
-            <SheetTitle>{selectedResult?.full_name || "Candidate"}</SheetTitle>
-          </SheetHeader>
-          {selectedResult ? (
-            <div className="mt-4 space-y-4 text-sm">
-              {(() => {
-                const candidate = candidateForResult(selectedResult);
-                return (
-                  <div className="rounded-lg border border-border/80 p-3">
-                    <p className="mb-2 font-medium">Contacts</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Email</p>
-                          <p title={candidate?.extracted_contacts_json?.email?.evidence?.snippet || ""}>
-                            {selectedResult.email || "-"}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {confidenceBadge(candidate?.extracted_contacts_json?.email?.confidence)}
-                          <Button variant="outline" size="sm" onClick={() => void copyValue(selectedResult.email)}>
-                            Copy
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Phone</p>
-                          <p title={candidate?.extracted_contacts_json?.phone?.evidence?.snippet || ""}>
-                            {selectedResult.phone || "-"}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {confidenceBadge(candidate?.extracted_contacts_json?.phone?.confidence)}
-                          <Button variant="outline" size="sm" onClick={() => void copyValue(selectedResult.phone)}>
-                            Copy
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="rounded-lg border border-border/80 p-3">
-                <p className="text-muted-foreground">Score</p>
-                <p className="text-2xl font-semibold">{selectedResult.total_score.toFixed(1)}</p>
-              </div>
-              <div className="rounded-lg border border-border/80 p-3">
-                <p className="mb-2 font-medium">Breakdown</p>
-                {Object.entries(selectedResult.breakdown_json?.breakdown || {}).map(([key, value]) => (
-                  <div key={key} className="mb-2">
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="capitalize">{key}</span>
-                      <span>{Number(value).toFixed(1)}%</span>
-                    </div>
-                    <Progress value={Number(value)} />
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-lg border border-border/80 p-3">
-                <p className="mb-2 font-medium">Evidence</p>
-                {selectedResult.breakdown_json?.reason ? (
-                  <p className="text-muted-foreground">Reason: {selectedResult.breakdown_json.reason}</p>
-                ) : (
-                  <p className="text-muted-foreground">No explicit rejection reason. Review candidate profile and CV.</p>
-                )}
-                <p className="mt-2 text-xs text-muted-foreground">PDF highlight viewer hooks can be attached to this panel.</p>
-              </div>
-            </div>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      <CandidateDetailDrawer
+        open={Boolean(selectedResult)}
+        result={selectedResult}
+        candidate={selectedCandidateDetail}
+        loading={isCandidateDetailLoading}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedResult(null);
+            setSelectedCandidateDetail(null);
+          }
+        }}
+        onCopy={(value) => {
+          void copyValue(value);
+        }}
+        onViewCv={() => {
+          void openCandidateCv(false);
+        }}
+        onDownloadCv={() => {
+          void openCandidateCv(true);
+        }}
+        onStatusChange={updateSingleDecision}
+      />
     </AppShell>
   );
 }

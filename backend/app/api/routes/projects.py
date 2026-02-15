@@ -1,6 +1,7 @@
 """Projects and job-scoped workflow API routes."""
 
 import logging
+import mimetypes
 import os
 import zipfile
 from datetime import UTC, datetime
@@ -9,7 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, File as FastAPIFile, HTTPException, Query, Response, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse as FastAPIFileResponse, JSONResponse
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, select
@@ -26,6 +27,7 @@ from app.models.score import Score
 from app.models.shortlist_run import ShortlistRun
 from app.models.user import User
 from app.schemas.job_flow import (
+    CandidateDetailResponse,
     CandidateListResponse,
     CandidateSummaryResponse,
     FileListResponse,
@@ -576,6 +578,110 @@ async def list_job_candidates(
         len(items),
     )
     return CandidateListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/jobs/{job_id}/candidates/{candidate_id}", response_model=CandidateDetailResponse)
+async def get_job_candidate_details(
+    job_id: int,
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CandidateDetailResponse:
+    """Get one candidate detail payload scoped strictly to the requested job."""
+    await _ensure_project_owned(project_id=job_id, current_user=current_user, db=db)
+
+    result = await db.execute(
+        select(Candidate, File)
+        .join(File, File.id == Candidate.file_id)
+        .where(Candidate.id == candidate_id, Candidate.job_id == job_id, File.job_id == job_id)
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+
+    candidate, file_row = row
+    if candidate.job_id != job_id or file_row.job_id != job_id:
+        logger.error(
+            "job scope violation in candidate details job_id=%s candidate_id=%s candidate_job_id=%s file_job_id=%s",
+            job_id,
+            candidate.id,
+            candidate.job_id,
+            file_row.job_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Candidate scope mismatch for requested job",
+        )
+
+    storage_exists = Path(file_row.storage_path).exists() if file_row.storage_path else False
+    return CandidateDetailResponse(
+        id=candidate.id,
+        job_id=candidate.job_id,
+        file_id=candidate.file_id,
+        full_name=candidate.full_name,
+        email=candidate.email,
+        phone=candidate.phone,
+        location=candidate.location,
+        years_experience_est=candidate.years_experience_est,
+        skills_top_json=candidate.skills_top_json,
+        structured_json=candidate.structured_json,
+        extracted_contacts_json=candidate.extracted_contacts_json,
+        extracted_meta_json=candidate.extracted_meta_json,
+        parsing_warnings_json=candidate.parsing_warnings_json,
+        status=candidate.status,
+        batch_id=file_row.batch_id,
+        file_status=file_row.status,
+        file_name=file_row.original_filename,
+        file_mime_type=file_row.mime_type,
+        cv_available=storage_exists,
+        created_at=candidate.created_at,
+    )
+
+
+@router.get("/jobs/{job_id}/candidates/{candidate_id}/cv")
+async def get_job_candidate_cv(
+    job_id: int,
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FastAPIFileResponse:
+    """Stream original candidate CV file scoped by job and user ownership."""
+    await _ensure_project_owned(project_id=job_id, current_user=current_user, db=db)
+
+    result = await db.execute(
+        select(Candidate, File)
+        .join(File, File.id == Candidate.file_id)
+        .where(Candidate.id == candidate_id, Candidate.job_id == job_id, File.job_id == job_id)
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+
+    candidate, file_row = row
+    if candidate.job_id != job_id or file_row.job_id != job_id:
+        logger.error(
+            "job scope violation in candidate cv fetch job_id=%s candidate_id=%s candidate_job_id=%s file_job_id=%s",
+            job_id,
+            candidate.id,
+            candidate.job_id,
+            file_row.job_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Candidate scope mismatch for requested job",
+        )
+
+    cv_path = Path(file_row.storage_path)
+    if not cv_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate CV not found")
+
+    media_type = file_row.mime_type or mimetypes.guess_type(file_row.original_filename)[0] or "application/octet-stream"
+    return FastAPIFileResponse(
+        path=cv_path,
+        media_type=media_type,
+        filename=file_row.original_filename,
+        headers={"Content-Disposition": f'inline; filename="{file_row.original_filename}"'},
+    )
 
 
 @router.post("/jobs/{job_id}/criteria", response_model=SaveCriteriaResponse)

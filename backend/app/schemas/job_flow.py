@@ -56,6 +56,31 @@ class CandidateListResponse(BaseModel):
     page_size: int
 
 
+class CandidateDetailResponse(BaseModel):
+    id: int
+    job_id: int
+    file_id: int
+    full_name: str
+    email: str | None
+    phone: str | None
+    location: str | None
+    years_experience_est: float | None
+    skills_top_json: dict[str, Any] | None
+    structured_json: dict[str, Any] | None
+    extracted_contacts_json: dict[str, Any] | None
+    extracted_meta_json: dict[str, Any] | None
+    parsing_warnings_json: dict[str, Any] | None
+    status: str
+    batch_id: str
+    file_status: str
+    file_name: str
+    file_mime_type: str
+    cv_available: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class UploadResponse(BaseModel):
     batch_id: str
     files_created: int

@@ -11,13 +11,21 @@ describe("settings store", () => {
       animationsEnabled: true,
       smoothTransitions: true,
       density: "normal",
+      accentPreset: "system",
+      customAccentHex: "#6366f1",
       focusMode: false,
       notificationsEnabled: true,
       seasonalEffects: false,
+      seasonalStyle: "auto",
+      snowIntensity: 1,
       auroraEnabled: false,
+      auroraOpacity: 0.55,
       typingAmbience: true,
       partyMode: false,
+      confettiStyle: "celebration",
       soundEnabled: false,
+      snowPreviewUntil: null,
+      partyBurstTick: 0,
       snowTriggerCount: 0,
       confettiTriggerCount: 0,
       magicHighlightCount: 0,
@@ -46,5 +54,22 @@ describe("settings store", () => {
   it("persists locale cookie when language changes", () => {
     useSettingsStore.getState().setLocale("fr");
     expect(document.cookie).toContain("cv_shortlister_locale=fr");
+  });
+
+  it("toggles seasonal effects and triggers snow preview state", () => {
+    useSettingsStore.getState().setSeasonalEffects(true);
+    useSettingsStore.getState().trySnow();
+
+    const state = useSettingsStore.getState();
+    expect(state.seasonalEffects).toBe(true);
+    expect(state.snowTriggerCount).toBe(1);
+    expect(state.snowPreviewUntil).not.toBeNull();
+  });
+
+  it("stores accent settings for personalization", () => {
+    useSettingsStore.getState().setAccentPreset("emerald");
+    useSettingsStore.getState().setCustomAccentHex("#22c55e");
+    expect(useSettingsStore.getState().accentPreset).toBe("emerald");
+    expect(useSettingsStore.getState().customAccentHex).toBe("#22c55e");
   });
 });

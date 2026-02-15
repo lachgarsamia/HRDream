@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AuthProvider } from "./auth-provider";
 import { GlobalEffects } from "./global-effects";
 import { I18nProvider } from "./i18n-provider";
+import { MotionShell } from "./motion-shell";
 import { PreferencesSync } from "./preferences-sync";
 import { ThemeProvider } from "./theme-provider";
 import { AppToaster } from "./app-toaster";
@@ -28,7 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <I18nProvider>
           <AuthProvider>
             <PreferencesSync />
-            {children}
+            <MotionShell>{children}</MotionShell>
             <GlobalEffects />
             <AppToaster />
           </AuthProvider>

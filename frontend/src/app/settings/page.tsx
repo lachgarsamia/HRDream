@@ -2,9 +2,12 @@
 
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/app-shell";
+import { DelightLabCards } from "@/components/settings/delight-lab-cards";
+import { useTypingPulse } from "@/hooks/use-typing-pulse";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,28 +19,44 @@ export default function SettingsPage() {
 
   const locale = useSettingsStore((state) => state.locale);
   const density = useSettingsStore((state) => state.density);
+  const accentPreset = useSettingsStore((state) => state.accentPreset);
+  const customAccentHex = useSettingsStore((state) => state.customAccentHex);
   const reducedMotion = useSettingsStore((state) => state.reducedMotion);
   const animationsEnabled = useSettingsStore((state) => state.animationsEnabled);
   const smoothTransitions = useSettingsStore((state) => state.smoothTransitions);
   const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
   const seasonalEffects = useSettingsStore((state) => state.seasonalEffects);
+  const seasonalStyle = useSettingsStore((state) => state.seasonalStyle);
+  const snowIntensity = useSettingsStore((state) => state.snowIntensity);
   const auroraEnabled = useSettingsStore((state) => state.auroraEnabled);
+  const auroraOpacity = useSettingsStore((state) => state.auroraOpacity);
   const typingAmbience = useSettingsStore((state) => state.typingAmbience);
   const partyMode = useSettingsStore((state) => state.partyMode);
+  const confettiStyle = useSettingsStore((state) => state.confettiStyle);
+  const soundEnabled = useSettingsStore((state) => state.soundEnabled);
   const focusMode = useSettingsStore((state) => state.focusMode);
 
   const setLocale = useSettingsStore((state) => state.setLocale);
   const setDensity = useSettingsStore((state) => state.setDensity);
+  const setAccentPreset = useSettingsStore((state) => state.setAccentPreset);
+  const setCustomAccentHex = useSettingsStore((state) => state.setCustomAccentHex);
   const setReducedMotion = useSettingsStore((state) => state.setReducedMotion);
   const setAnimationsEnabled = useSettingsStore((state) => state.setAnimationsEnabled);
   const setSmoothTransitions = useSettingsStore((state) => state.setSmoothTransitions);
   const setNotificationsEnabled = useSettingsStore((state) => state.setNotificationsEnabled);
   const setSeasonalEffects = useSettingsStore((state) => state.setSeasonalEffects);
+  const setSeasonalStyle = useSettingsStore((state) => state.setSeasonalStyle);
+  const setSnowIntensity = useSettingsStore((state) => state.setSnowIntensity);
   const setAuroraEnabled = useSettingsStore((state) => state.setAuroraEnabled);
+  const setAuroraOpacity = useSettingsStore((state) => state.setAuroraOpacity);
   const setTypingAmbience = useSettingsStore((state) => state.setTypingAmbience);
   const setPartyMode = useSettingsStore((state) => state.setPartyMode);
+  const setConfettiStyle = useSettingsStore((state) => state.setConfettiStyle);
+  const setSoundEnabled = useSettingsStore((state) => state.setSoundEnabled);
   const setFocusMode = useSettingsStore((state) => state.setFocusMode);
-  const triggerSnow = useSettingsStore((state) => state.triggerSnow);
+  const triggerSnow = useSettingsStore((state) => state.trySnow);
+  const triggerConfetti = useSettingsStore((state) => state.burstConfetti);
+  const { pulsing: previewPulsing, onType: previewTypingPulse } = useTypingPulse(500);
 
   return (
     <AppShell title={t("title")} subtitle={t("subtitle")}>
@@ -67,6 +86,32 @@ export default function SettingsPage() {
                     </Button>
                   ))}
                 </div>
+                <Label>Accent color</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["system", "indigo", "emerald", "rose", "amber", "cyan", "custom"] as const).map((value) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={accentPreset === value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setAccentPreset(value)}
+                    >
+                      {value}
+                    </Button>
+                  ))}
+                </div>
+                {accentPreset === "custom" ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-accent">Custom accent</Label>
+                    <Input
+                      id="custom-accent"
+                      type="color"
+                      value={customAccentHex}
+                      className="h-9 w-20 p-1"
+                      onChange={(event) => setCustomAccentHex(event.target.value)}
+                    />
+                  </div>
+                ) : null}
                 <Label>{t("density")}</Label>
                 <div className="flex gap-2">
                   <Button type="button" variant={density === "normal" ? "default" : "outline"} size="sm" onClick={() => setDensity("normal")}>{t("normal")}</Button>
@@ -84,6 +129,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">Theme and density changes apply instantly across tables and cards.</p>
                   <div className="mt-2 h-2 w-full rounded bg-muted">
                     <div className="h-full w-2/3 rounded bg-primary" />
+                  </div>
+                  <div className="mt-2 inline-flex items-center rounded-full border border-border/70 px-2 py-1 text-[11px]">
+                    Active theme mode: {theme}
                   </div>
                 </div>
               </div>
@@ -137,14 +185,40 @@ export default function SettingsPage() {
               <CardTitle>Delight Lab</CardTitle>
               <CardDescription>Optional high-end interactions. Always accessibility-safe.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <SettingSwitch label={t("seasonal")} checked={seasonalEffects} onCheckedChange={setSeasonalEffects} />
-              <SettingSwitch label="Aurora gradient" checked={auroraEnabled} onCheckedChange={setAuroraEnabled} />
-              <SettingSwitch label="Typing ambience pulse" checked={typingAmbience} onCheckedChange={setTypingAmbience} />
-              <SettingSwitch label="Party mode" checked={partyMode} onCheckedChange={setPartyMode} />
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={triggerSnow}>{t("trySnow")}</Button>
-                <Button type="button" variant="outline" onClick={() => setPartyMode(true)}>Enable Party Mode</Button>
+            <CardContent>
+              <DelightLabCards
+                seasonalEffects={seasonalEffects}
+                seasonalStyle={seasonalStyle}
+                snowIntensity={snowIntensity}
+                auroraEnabled={auroraEnabled}
+                auroraOpacity={auroraOpacity}
+                typingAmbience={typingAmbience}
+                partyMode={partyMode}
+                confettiStyle={confettiStyle}
+                soundEnabled={soundEnabled}
+                setSeasonalEffects={setSeasonalEffects}
+                setSeasonalStyle={setSeasonalStyle}
+                setSnowIntensity={setSnowIntensity}
+                setAuroraEnabled={setAuroraEnabled}
+                setAuroraOpacity={setAuroraOpacity}
+                setTypingAmbience={setTypingAmbience}
+                setPartyMode={setPartyMode}
+                setConfettiStyle={setConfettiStyle}
+                setSoundEnabled={setSoundEnabled}
+                onTrySnow={triggerSnow}
+                onBurstConfetti={triggerConfetti}
+                onTypingPulseDemo={previewTypingPulse}
+              />
+              <div className="mt-3 rounded-lg border border-border/70 p-3">
+                <Label htmlFor="typing-preview">Typing pulse preview</Label>
+                <Input
+                  id="typing-preview"
+                  placeholder="Type to preview"
+                  onChange={previewTypingPulse}
+                  className={`mt-2 h-9 transition-all duration-200 ${
+                    previewPulsing ? "ring-2 ring-primary/40 shadow-[0_0_0_6px_rgba(99,102,241,0.2),0_8px_22px_-14px_rgba(79,70,229,0.7)]" : ""
+                  }`}
+                />
               </div>
             </CardContent>
           </Card>

@@ -217,3 +217,32 @@ export async function apiDownload(path: string, filename: string, auth = true): 
   anchor.remove();
   URL.revokeObjectURL(url);
 }
+
+export async function apiFetchBlob(path: string, auth = true): Promise<Blob> {
+  const headers = new Headers();
+  const token = getToken();
+
+  if (auth) {
+    if (!token) {
+      const error: ApiError = { status: 401, detail: "Missing auth token" };
+      clearTokenAndNotify();
+      throw error;
+    }
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "GET",
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await parseResponseError(response);
+    if (response.status === 401) {
+      clearTokenAndNotify();
+    }
+    throw error;
+  }
+
+  return response.blob();
+}

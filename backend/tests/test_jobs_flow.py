@@ -178,3 +178,71 @@ async def test_exports_download_csv_and_pdf_for_completed_run(client: AsyncClien
     assert pdf_resp.headers["content-type"].startswith("application/pdf")
     assert "attachment; filename=\"shortlist_report_run_" in pdf_resp.headers["content-disposition"]
     assert pdf_resp.content.startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
+async def test_candidate_details_and_cv_are_job_scoped(client: AsyncClient) -> None:
+    token = await _register_and_login(client, "candidate-detail@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    job_a = await client.post("/jobs", json={"name": "Job A"}, headers=headers)
+    job_b = await client.post("/jobs", json={"name": "Job B"}, headers=headers)
+    assert job_a.status_code == 201
+    assert job_b.status_code == 201
+    job_a_id = job_a.json()["id"]
+    job_b_id = job_b.json()["id"]
+
+    upload = await client.post(
+        f"/jobs/{job_a_id}/upload",
+        files=[("files", ("alice_cv.pdf", b"Alice alice@example.com +1 555 000 1111 React 6 years", "application/pdf"))],
+        headers=headers,
+    )
+    assert upload.status_code == 200
+
+    candidates = await client.get(f"/jobs/{job_a_id}/candidates", headers=headers)
+    assert candidates.status_code == 200
+    candidate_id = candidates.json()["items"][0]["id"]
+
+    detail_ok = await client.get(f"/jobs/{job_a_id}/candidates/{candidate_id}", headers=headers)
+    assert detail_ok.status_code == 200
+    payload = detail_ok.json()
+    assert payload["job_id"] == job_a_id
+    assert payload["file_name"] == "alice_cv.pdf"
+    assert payload["cv_available"] is True
+
+    cv_ok = await client.get(f"/jobs/{job_a_id}/candidates/{candidate_id}/cv", headers=headers)
+    assert cv_ok.status_code == 200
+    assert cv_ok.headers["content-disposition"].startswith("inline; filename=")
+    assert cv_ok.content.startswith(b"Alice")
+
+    detail_wrong_job = await client.get(f"/jobs/{job_b_id}/candidates/{candidate_id}", headers=headers)
+    assert detail_wrong_job.status_code == 404
+
+    cv_wrong_job = await client.get(f"/jobs/{job_b_id}/candidates/{candidate_id}/cv", headers=headers)
+    assert cv_wrong_job.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_job_removes_job_scoped_records(client: AsyncClient) -> None:
+    token = await _register_and_login(client, "delete-job@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    job = await client.post("/jobs", json={"name": "Delete Me"}, headers=headers)
+    assert job.status_code == 201
+    job_id = job.json()["id"]
+
+    upload = await client.post(
+        f"/jobs/{job_id}/upload",
+        files=[("files", ("delete_me.pdf", b"Delete Me delete@test.com +1 202 555 0199 React 3 years", "application/pdf"))],
+        headers=headers,
+    )
+    assert upload.status_code == 200
+
+    delete_resp = await client.delete(f"/jobs/{job_id}", headers=headers)
+    assert delete_resp.status_code == 204
+
+    get_resp = await client.get(f"/jobs/{job_id}", headers=headers)
+    assert get_resp.status_code == 404
+
+    candidates_resp = await client.get(f"/jobs/{job_id}/candidates", headers=headers)
+    assert candidates_resp.status_code == 404

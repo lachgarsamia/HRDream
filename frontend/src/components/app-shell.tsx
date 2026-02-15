@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 import { type ThemePreference, useSettingsStore } from "@/lib/settings";
 import { getJobFiles, getJobs, getJobRuns, type Job } from "@/lib/jobs";
+import { useTypingPulse } from "@/hooks/use-typing-pulse";
 
 type AppShellProps = {
   title: string;
@@ -72,7 +73,7 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
-  const { theme, setTheme, mounted } = useTheme();
+  const { theme, resolvedTheme, setTheme, mounted } = useTheme();
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
   const density = useSettingsStore((state) => state.density);
@@ -80,10 +81,12 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
   const setFocusMode = useSettingsStore((state) => state.setFocusMode);
   const reducedMotionSetting = useSettingsStore((state) => state.reducedMotion);
   const smoothTransitions = useSettingsStore((state) => state.smoothTransitions);
+  const typingAmbience = useSettingsStore((state) => state.typingAmbience);
   const tNav = useTranslations("nav");
   const tShell = useTranslations("shell");
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = prefersReducedMotion || reducedMotionSetting || !smoothTransitions;
+  const { pulsing: jobSearchPulsing, onType: onJobSearchType } = useTypingPulse(500);
 
   const [collapsed, setCollapsed] = useState(false);
   const [jobFilter, setJobFilter] = useState("");
@@ -247,9 +250,18 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
                 <Search className="h-3.5 w-3.5 text-muted-foreground" />
                 <input
                   value={jobFilter}
-                  onChange={(event) => setJobFilter(event.target.value)}
+                  onChange={(event) => {
+                    if (typingAmbience && !reduceMotion) onJobSearchType();
+                    setJobFilter(event.target.value);
+                  }}
                   placeholder="Jump to job..."
-                  className="h-8 w-full bg-transparent text-xs outline-none"
+                  className={cn(
+                    "h-8 w-full bg-transparent text-xs outline-none transition-all duration-200",
+                    typingAmbience &&
+                      !reduceMotion &&
+                      jobSearchPulsing &&
+                      "ring-2 ring-primary/40 shadow-[0_0_0_6px_rgba(99,102,241,0.2),0_8px_22px_-14px_rgba(79,70,229,0.7)]"
+                  )}
                 />
               </div>
               <div className="space-y-2">
@@ -342,6 +354,11 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
                 <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</p>
               </div>
               <div className="flex items-center gap-2">
+                {theme === "system" ? (
+                  <Badge variant="outline" className="system-mode-pill hidden h-9 px-3 text-[11px] font-medium sm:inline-flex">
+                    System · {resolvedTheme === "dark" ? "Dark OS" : "Light OS"}
+                  </Badge>
+                ) : null}
                 <CommandPalette />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
