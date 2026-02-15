@@ -28,11 +28,11 @@ export function GlobalEffects() {
   }, [reduceMotion, seasonalEffects, snowTriggerCount]);
 
   useEffect(() => {
-    if (reduceMotion || confettiTriggerCount === 0) return;
+    if (reduceMotion || confettiTriggerCount === 0 || !seasonalEffects) return;
     setShowConfetti(true);
     const timer = window.setTimeout(() => setShowConfetti(false), 1400);
     return () => window.clearTimeout(timer);
-  }, [confettiTriggerCount, reduceMotion]);
+  }, [confettiTriggerCount, reduceMotion, seasonalEffects]);
 
   const snowflakes = useMemo(
     () =>

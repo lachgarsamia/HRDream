@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
   const soundEnabled = useSettingsStore((state) => state.soundEnabled);
   const seasonalEffects = useSettingsStore((state) => state.seasonalEffects);
+  const focusMode = useSettingsStore((state) => state.focusMode);
 
   const setLocale = useSettingsStore((state) => state.setLocale);
   const setDensity = useSettingsStore((state) => state.setDensity);
@@ -26,6 +27,7 @@ export default function SettingsPage() {
   const setNotificationsEnabled = useSettingsStore((state) => state.setNotificationsEnabled);
   const setSoundEnabled = useSettingsStore((state) => state.setSoundEnabled);
   const setSeasonalEffects = useSettingsStore((state) => state.setSeasonalEffects);
+  const setFocusMode = useSettingsStore((state) => state.setFocusMode);
   const triggerSnow = useSettingsStore((state) => state.triggerSnow);
 
   return (
@@ -105,6 +107,10 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
               <p className="text-sm font-medium">{t("seasonal")}</p>
               <Switch checked={seasonalEffects} onCheckedChange={setSeasonalEffects} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
+              <p className="text-sm font-medium">Focus mode</p>
+              <Switch checked={focusMode} onCheckedChange={setFocusMode} />
             </div>
             <Button type="button" variant="outline" onClick={triggerSnow}>{t("trySnow")}</Button>
           </CardContent>

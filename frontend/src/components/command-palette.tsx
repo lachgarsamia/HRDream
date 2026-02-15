@@ -14,6 +14,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { getJobCandidates, getJobs, getJobRuns } from "@/lib/jobs";
+import { useSettingsStore } from "@/lib/settings";
 
 type CommandEntry = {
   id: string;
@@ -30,6 +31,9 @@ export function CommandPalette() {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("shell");
+  const triggerSnow = useSettingsStore((state) => state.triggerSnow);
+  const focusMode = useSettingsStore((state) => state.focusMode);
+  const setFocusMode = useSettingsStore((state) => state.setFocusMode);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -117,8 +121,20 @@ export function CommandPalette() {
           if (match) router.push(`/jobs/${match[1]}?tab=exports`);
         },
       },
+      {
+        id: "action-snow",
+        label: "/snow",
+        subtitle: "Trigger seasonal snow",
+        onSelect: () => triggerSnow(),
+      },
+      {
+        id: "action-zen",
+        label: "/zen",
+        subtitle: focusMode ? "Disable focus mode" : "Enable focus mode",
+        onSelect: () => setFocusMode(!focusMode),
+      },
     ],
-    [pathname, router]
+    [focusMode, pathname, router, setFocusMode, triggerSnow]
   );
 
   const select = (entry: CommandEntry) => {

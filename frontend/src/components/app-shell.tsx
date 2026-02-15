@@ -46,6 +46,7 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
   const density = useSettingsStore((state) => state.density);
+  const focusMode = useSettingsStore((state) => state.focusMode);
   const reducedMotionSetting = useSettingsStore((state) => state.reducedMotion);
   const tNav = useTranslations("nav");
   const tShell = useTranslations("shell");
@@ -84,8 +85,8 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="grid min-h-screen grid-cols-[232px_1fr]">
-        <aside className="flex flex-col border-r border-border/70 bg-card/50 p-4 lg:p-5">
+      <div className={cn("grid min-h-screen", focusMode ? "grid-cols-1" : "grid-cols-[232px_1fr]")}>
+        <aside className={cn("flex flex-col border-r border-border/70 bg-card/50 p-4 lg:p-5", focusMode ? "hidden" : "")}>
           <div className="mb-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">CV Shortlister</p>
             <p className="mt-1 text-base font-semibold text-foreground">{tShell("workspace")}</p>
@@ -178,7 +179,7 @@ export function AppShell({ title, subtitle, primaryAction, contextLabel, context
             </div>
           </header>
 
-          <div className={cn("mx-auto w-full max-w-[1240px] flex-1 p-5 lg:p-8", density === "dense" ? "space-y-4" : "space-y-6")}>
+          <div className={cn("mx-auto w-full flex-1 p-5 lg:p-8", focusMode ? "max-w-[1440px]" : "max-w-[1240px]", density === "dense" ? "space-y-4" : "space-y-6")}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               {contextLabel && contextValue ? (
                 <Badge variant="outline">
