@@ -88,9 +88,13 @@ export function GlobalEffects() {
 
   useEffect(() => {
     if (reduceMotion) return;
-    if (!snowTriggerCount && !seasonalEffects && !partyMode) return;
+    if (seasonalEffects) {
+      setShowSnow(true);
+      return;
+    }
+    if (!snowTriggerCount && !partyMode) return;
     setShowSnow(true);
-    const timer = window.setTimeout(() => setShowSnow(false), seasonalEffects || partyMode ? 10000 : 7000);
+    const timer = window.setTimeout(() => setShowSnow(false), partyMode ? 10000 : 7000);
     return () => window.clearTimeout(timer);
   }, [reduceMotion, seasonalEffects, partyMode, snowTriggerCount]);
 

@@ -20,7 +20,6 @@ export default function SettingsPage() {
   const animationsEnabled = useSettingsStore((state) => state.animationsEnabled);
   const smoothTransitions = useSettingsStore((state) => state.smoothTransitions);
   const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
-  const soundEnabled = useSettingsStore((state) => state.soundEnabled);
   const seasonalEffects = useSettingsStore((state) => state.seasonalEffects);
   const auroraEnabled = useSettingsStore((state) => state.auroraEnabled);
   const typingAmbience = useSettingsStore((state) => state.typingAmbience);
@@ -33,7 +32,6 @@ export default function SettingsPage() {
   const setAnimationsEnabled = useSettingsStore((state) => state.setAnimationsEnabled);
   const setSmoothTransitions = useSettingsStore((state) => state.setSmoothTransitions);
   const setNotificationsEnabled = useSettingsStore((state) => state.setNotificationsEnabled);
-  const setSoundEnabled = useSettingsStore((state) => state.setSoundEnabled);
   const setSeasonalEffects = useSettingsStore((state) => state.setSeasonalEffects);
   const setAuroraEnabled = useSettingsStore((state) => state.setAuroraEnabled);
   const setTypingAmbience = useSettingsStore((state) => state.setTypingAmbience);
@@ -128,7 +126,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <SettingSwitch label={t("toasts")} checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
-              <SettingSwitch label={t("sound")} checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+              <p className="text-xs text-muted-foreground">In-app toast notifications are persisted and applied globally.</p>
             </CardContent>
           </Card>
         </TabsContent>
