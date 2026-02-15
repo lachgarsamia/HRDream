@@ -137,6 +137,7 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
   const triggerConfetti = useSettingsStore((state) => state.triggerConfetti);
   const triggerMagicHighlight = useSettingsStore((state) => state.triggerMagicHighlight);
   const magicHighlightCount = useSettingsStore((state) => state.magicHighlightCount);
+  const typingAmbience = useSettingsStore((state) => state.typingAmbience);
   const reducedMotionSetting = useSettingsStore((state) => state.reducedMotion);
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = prefersReducedMotion || reducedMotionSetting;
@@ -787,7 +788,17 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                   <Card>
                     <CardHeader className="pb-2">
                       <CardDescription>Processing</CardDescription>
-                      <CardTitle className="text-2xl text-primary">{processingCount}</CardTitle>
+                      <CardTitle className="flex items-center gap-2 text-2xl text-primary">
+                        {processingCount}
+                        {typingAmbience && processingCount > 0 ? (
+                          <motion.span
+                            className="inline-block h-2.5 w-2.5 rounded-full bg-primary"
+                            animate={reduceMotion ? undefined : { opacity: [0.3, 1, 0.3], scale: [1, 1.15, 1] }}
+                            transition={{ duration: 1.2, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
+                            aria-hidden
+                          />
+                        ) : null}
+                      </CardTitle>
                     </CardHeader>
                   </Card>
                   <Card>

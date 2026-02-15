@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/command";
 import { getJobCandidates, getJobs, getJobRuns } from "@/lib/jobs";
 import { useSettingsStore } from "@/lib/settings";
+import { useTheme } from "@/components/theme-provider";
 
 type CommandEntry = {
   id: string;
@@ -34,6 +35,9 @@ export function CommandPalette() {
   const triggerSnow = useSettingsStore((state) => state.triggerSnow);
   const focusMode = useSettingsStore((state) => state.focusMode);
   const setFocusMode = useSettingsStore((state) => state.setFocusMode);
+  const locale = useSettingsStore((state) => state.locale);
+  const setLocale = useSettingsStore((state) => state.setLocale);
+  const { resolvedTheme, setTheme } = useTheme();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -104,6 +108,24 @@ export function CommandPalette() {
         },
       },
       {
+        id: "action-home",
+        label: "Go to Home",
+        subtitle: "Open dashboard",
+        onSelect: () => router.push("/dashboard"),
+      },
+      {
+        id: "action-jobs",
+        label: "Go to Jobs",
+        subtitle: "Open jobs list",
+        onSelect: () => router.push("/jobs"),
+      },
+      {
+        id: "action-settings",
+        label: "Go to Settings",
+        subtitle: "Open preferences",
+        onSelect: () => router.push("/settings"),
+      },
+      {
         id: "action-run",
         label: "Run shortlist",
         subtitle: "Open shortlist tab",
@@ -123,7 +145,7 @@ export function CommandPalette() {
       },
       {
         id: "action-snow",
-        label: "/snow",
+        label: "Let it snow",
         subtitle: "Trigger seasonal snow",
         onSelect: () => triggerSnow(),
       },
@@ -133,8 +155,20 @@ export function CommandPalette() {
         subtitle: focusMode ? "Disable focus mode" : "Enable focus mode",
         onSelect: () => setFocusMode(!focusMode),
       },
+      {
+        id: "action-theme",
+        label: "Toggle dark mode",
+        subtitle: resolvedTheme === "dark" ? "Switch to light" : "Switch to dark",
+        onSelect: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+      },
+      {
+        id: "action-language",
+        label: "Toggle language",
+        subtitle: locale === "en" ? "Switch to French" : "Switch to English",
+        onSelect: () => setLocale(locale === "en" ? "fr" : "en"),
+      },
     ],
-    [focusMode, pathname, router, setFocusMode, triggerSnow]
+    [focusMode, locale, pathname, resolvedTheme, router, setFocusMode, setLocale, setTheme, triggerSnow]
   );
 
   const select = (entry: CommandEntry) => {
@@ -161,7 +195,15 @@ export function CommandPalette() {
           <CommandGroup heading="Quick actions">
             {quickActions.map((entry) => (
               <CommandItem key={entry.id} onSelect={() => select(entry)}>
-                {entry.id.includes("upload") ? <FolderUp className="h-4 w-4" /> : entry.id.includes("run") ? <Play className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                {entry.id.includes("upload") ? (
+                  <FolderUp className="h-4 w-4" />
+                ) : entry.id.includes("run") ? (
+                  <Play className="h-4 w-4" />
+                ) : entry.id.includes("export") ? (
+                  <Download className="h-4 w-4" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
                 <div className="flex flex-col">
                   <span>{entry.label}</span>
                   <span className="text-xs text-muted-foreground">{entry.subtitle}</span>

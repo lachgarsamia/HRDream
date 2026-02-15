@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await apiLogin(credentials);
     const currentUser = await getCurrentUser();
     setUser(currentUser);
-    router.push("/jobs");
+    router.push("/dashboard");
   }, [router]);
 
   const register = useCallback(async (data: RegisterData) => {

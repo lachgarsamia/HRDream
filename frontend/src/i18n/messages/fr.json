@@ -1,5 +1,6 @@
 {
   "nav": {
+    "home": "Accueil",
     "jobs": "Postes",
     "settings": "Paramètres",
     "logout": "Se déconnecter"

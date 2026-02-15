@@ -1,5 +1,6 @@
 {
   "nav": {
+    "home": "Home",
     "jobs": "Jobs",
     "settings": "Settings",
     "logout": "Logout"

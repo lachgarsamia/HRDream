@@ -20,8 +20,8 @@ export function Header() {
             <div className="h-10 w-20 animate-pulse rounded-md bg-muted" />
           ) : isAuthenticated ? (
             <>
-              <Link href="/jobs">
-                <Button variant="ghost">Jobs</Button>
+              <Link href="/dashboard">
+                <Button variant="ghost">Dashboard</Button>
               </Link>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
