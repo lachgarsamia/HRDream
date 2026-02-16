@@ -246,3 +246,118 @@ async def test_delete_job_removes_job_scoped_records(client: AsyncClient) -> Non
 
     candidates_resp = await client.get(f"/jobs/{job_id}/candidates", headers=headers)
     assert candidates_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_engineering_criteria_filters_non_engineering_candidates(client: AsyncClient) -> None:
+    token = await _register_and_login(client, "engineering-filter@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    job = await client.post("/jobs", json={"name": "Engineer Search"}, headers=headers)
+    assert job.status_code == 201
+    job_id = job.json()["id"]
+
+    upload = await client.post(
+        f"/jobs/{job_id}/upload",
+        files=[
+            ("files", ("software_engineer.pdf", b"Senior Software Engineer backend developer python docker", "application/pdf")),
+            ("files", ("talent_acquisition.pdf", b"Technical Recruiter talent acquisition partner engineering hiring", "application/pdf")),
+            ("files", ("product_manager.pdf", b"Product Manager roadmap strategy scrum", "application/pdf")),
+        ],
+        headers=headers,
+    )
+    assert upload.status_code == 200
+
+    criteria = await client.post(
+        f"/jobs/{job_id}/criteria",
+        json={
+            "criteria_json": {
+                "role_title": "Software Engineer",
+                "role_family": "engineering",
+                "role_titles": ["Software Engineer", "Backend Engineer"],
+                "allow_cross_family_matches": False,
+                "must_have_technical_skills": ["python"],
+                "must_have_frameworks": [],
+                "must_have_tools": [],
+                "nice_to_have_skills": ["docker"],
+                "nice_to_have_frameworks": [],
+                "nice_to_have_tools": [],
+                "hard_filter_toggles": {
+                    "reject_if_missing_must_have": False,
+                    "reject_if_location_mismatch": False,
+                    "reject_if_min_exp_not_met": False,
+                    "reject_if_missing_language": False,
+                },
+            }
+        },
+        headers=headers,
+    )
+    assert criteria.status_code == 200
+
+    run = await client.post(f"/jobs/{job_id}/runs", json={}, headers=headers)
+    assert run.status_code == 201
+    run_id = run.json()["id"]
+
+    results = await client.get(f"/runs/{run_id}/results", headers=headers)
+    assert results.status_code == 200
+    items = results.json()["items"]
+    by_name = {item["full_name"]: item for item in items}
+
+    assert by_name["Software Engineer"]["decision"] in {"shortlisted", "undecided"}
+    assert by_name["Talent Acquisition"]["decision"] == "rejected"
+    assert by_name["Product Manager"]["decision"] == "rejected"
+
+
+@pytest.mark.asyncio
+async def test_engineering_filter_override_allows_cross_family_matches(client: AsyncClient) -> None:
+    token = await _register_and_login(client, "engineering-override@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    job = await client.post("/jobs", json={"name": "Engineer Override"}, headers=headers)
+    assert job.status_code == 201
+    job_id = job.json()["id"]
+
+    upload = await client.post(
+        f"/jobs/{job_id}/upload",
+        files=[
+            ("files", ("software_engineer.pdf", b"Software Engineer backend python docker", "application/pdf")),
+            ("files", ("technical_recruiter.pdf", b"Technical Recruiter supporting engineering hiring", "application/pdf")),
+        ],
+        headers=headers,
+    )
+    assert upload.status_code == 200
+
+    criteria = await client.post(
+        f"/jobs/{job_id}/criteria",
+        json={
+            "criteria_json": {
+                "role_title": "Software Engineer",
+                "role_family": "engineering",
+                "role_titles": ["Software Engineer"],
+                "allow_cross_family_matches": True,
+                "must_have_technical_skills": [],
+                "must_have_frameworks": [],
+                "must_have_tools": [],
+                "hard_filter_toggles": {
+                    "reject_if_missing_must_have": False,
+                    "reject_if_location_mismatch": False,
+                    "reject_if_min_exp_not_met": False,
+                    "reject_if_missing_language": False,
+                },
+            }
+        },
+        headers=headers,
+    )
+    assert criteria.status_code == 200
+
+    run = await client.post(f"/jobs/{job_id}/runs", json={}, headers=headers)
+    assert run.status_code == 201
+    run_id = run.json()["id"]
+
+    results = await client.get(f"/runs/{run_id}/results", headers=headers)
+    assert results.status_code == 200
+    items = results.json()["items"]
+    recruiter = next(item for item in items if item["full_name"] == "Technical Recruiter")
+    assert recruiter["decision"] in {"rejected", "undecided", "shortlisted"}
+    # Override keeps recruiter from being auto-rejected by family mismatch reason.
+    assert "role family" not in str(recruiter["breakdown_json"].get("reason") or "").lower()

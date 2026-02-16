@@ -57,6 +57,10 @@ const WARNING_FILTERS: WarningFilter[] = ["low_confidence_email", "low_confidenc
 
 type CriteriaState = {
   role_title: string;
+  role_family: "engineering" | "product" | "design" | "data" | "sales" | "hr" | "ops" | "finance" | "legal" | "other";
+  role_titles: string;
+  exclude_role_families: string;
+  allow_cross_family_matches: boolean;
   must_have_skills: string;
   nice_to_have_skills: string;
   location_mode: "any" | "remote" | "hybrid" | "onsite";
@@ -185,6 +189,10 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
 
   const [criteria, setCriteria] = useState<CriteriaState>({
     role_title: "",
+    role_family: "engineering",
+    role_titles: "",
+    exclude_role_families: "",
+    allow_cross_family_matches: false,
     must_have_skills: "",
     nice_to_have_skills: "",
     location_mode: "any",
@@ -366,6 +374,10 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
       setIsSavingCriteria(true);
       const payload = {
         role_title: criteria.role_title,
+        role_family: criteria.role_family,
+        role_titles: splitCsv(criteria.role_titles),
+        exclude_role_families: splitCsv(criteria.exclude_role_families),
+        allow_cross_family_matches: criteria.allow_cross_family_matches,
         must_have_technical_skills: splitCsv(criteria.must_have_skills),
         must_have_frameworks: [],
         must_have_tools: [],
@@ -1043,6 +1055,47 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label>Role family</Label>
+                    <select
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={criteria.role_family}
+                      onChange={(event) =>
+                        setCriteria((prev) => ({
+                          ...prev,
+                          role_family: event.target.value as CriteriaState["role_family"],
+                        }))
+                      }
+                    >
+                      {["engineering", "product", "design", "data", "sales", "hr", "ops", "finance", "legal", "other"].map((family) => (
+                        <option key={family} value={family}>
+                          {family[0].toUpperCase() + family.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Canonical role titles (comma separated)</Label>
+                    <Input
+                      value={criteria.role_titles}
+                      onChange={(event) => setCriteria((prev) => ({ ...prev, role_titles: event.target.value }))}
+                      placeholder="Software Engineer, Backend Engineer"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Exclude role families (comma separated)</Label>
+                    <Input
+                      value={criteria.exclude_role_families}
+                      onChange={(event) => setCriteria((prev) => ({ ...prev, exclude_role_families: event.target.value }))}
+                      placeholder="hr, product"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
                     <Label>Location mode</Label>
                     <select
                       className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -1093,6 +1146,14 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                 </div>
 
                 <div className="grid gap-2 md:grid-cols-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={criteria.allow_cross_family_matches}
+                      onChange={(event) => setCriteria((prev) => ({ ...prev, allow_cross_family_matches: event.target.checked }))}
+                    />
+                    Allow cross-family matches
+                  </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -1554,6 +1615,11 @@ export function JobWorkspaceClient({ jobId, initialTab }: JobWorkspaceClientProp
                                     </Badge>
                                   ) : null}
                                 </div>
+                                {row.decision === "rejected" && reason ? (
+                                  <p className="mt-1 max-w-[220px] text-xs text-muted-foreground">
+                                    {reason}
+                                  </p>
+                                ) : null}
                               </td>
                               <td className="p-3">
                                 <div className="space-y-1">

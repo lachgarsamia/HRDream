@@ -126,7 +126,15 @@ export interface RunResultItem {
   years_experience_est: number | null;
   skills_top_json: { items?: string[] } | null;
   total_score: number;
-  breakdown_json: { breakdown?: Record<string, number>; reason?: string | null; missing_must_have?: string[] };
+  breakdown_json: {
+    breakdown?: Record<string, number>;
+    reason?: string | null;
+    missing_must_have?: string[];
+    matched_title_tokens?: string[];
+    matched_skills?: string[];
+    inferred_role_family?: string | null;
+    inferred_role_family_confidence?: number | null;
+  };
   decision: string;
 }
 
@@ -180,6 +188,10 @@ export interface HardFilterToggles {
 
 export interface RoleIntakePayload {
   role_title: string;
+  role_family?: "engineering" | "product" | "design" | "data" | "sales" | "hr" | "ops" | "finance" | "legal" | "other";
+  role_titles?: string[];
+  exclude_role_families?: string[];
+  allow_cross_family_matches?: boolean;
   seniority: Seniority;
   role_category: RoleCategory;
   employment_type: EmploymentType;

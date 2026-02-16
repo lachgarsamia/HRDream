@@ -99,6 +99,10 @@ def _suggest_defaults(payload: RoleSuggestRequest) -> RoleCriteriaIntake:
 
     return RoleCriteriaIntake(
         role_title=payload.role_title,
+        role_family="engineering",
+        role_titles=[payload.role_title],
+        exclude_role_families=[],
+        allow_cross_family_matches=False,
         seniority="senior",
         role_category="engineering",
         employment_type="full_time",
@@ -784,7 +788,13 @@ async def create_job_run(
     db.add(run)
     await db.flush()
 
-    for candidate, _ in rows:
+    for candidate, file_row in rows:
+        pages = (file_row.per_page_text_json or {}).get("pages", []) if file_row else []
+        page_text = "\n".join(
+            str(page.get("text", "")) for page in pages if isinstance(page, dict)
+        )
+        headline_lines = [line.strip() for line in page_text.splitlines() if line.strip()][:8]
+        headline = " | ".join(headline_lines[:3]) or candidate.full_name
         structured = candidate.structured_json or {}
         scoring_input = {
             "skills": structured.get("skills", []),
@@ -796,6 +806,8 @@ async def create_job_run(
             "keywords": structured.get("keywords", []),
             "embedding_similarity": 0.7,
             "languages": structured.get("languages", []),
+            "headline": headline,
+            "profile_text": page_text[:5000],
         }
         score_result = compute_score(criteria_json, scoring_input)
 
@@ -816,6 +828,10 @@ async def create_job_run(
                     "breakdown": score_result.get("breakdown", {}),
                     "reason": score_result.get("reason"),
                     "missing_must_have": score_result.get("missing_must_have", []),
+                    "matched_title_tokens": score_result.get("matched_title_tokens", []),
+                    "matched_skills": score_result.get("matched_skills", []),
+                    "inferred_role_family": score_result.get("inferred_role_family"),
+                    "inferred_role_family_confidence": score_result.get("inferred_role_family_confidence"),
                 },
                 decision=decision,
             )

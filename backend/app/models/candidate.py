@@ -26,6 +26,7 @@ class Candidate(Base):
     extracted_contacts_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     extracted_meta_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     parsing_warnings_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    profile_signature_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)  # NEW: role_family_scores, top_titles, skill_clusters
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="indexed")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

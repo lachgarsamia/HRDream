@@ -17,6 +17,7 @@ RoleCategory = Literal[
     "finance",
     "other",
 ]
+RoleFamily = Literal["engineering", "product", "design", "data", "sales", "hr", "ops", "finance", "legal", "other"]
 EmploymentType = Literal["full_time", "part_time", "contract", "temporary", "internship"]
 WorkMode = Literal["remote", "hybrid", "onsite"]
 LocationStrictness = Literal["hard_filter", "soft_preference"]
@@ -44,6 +45,10 @@ class HardFilterToggles(BaseModel):
 
 class RoleCriteriaIntake(BaseModel):
     role_title: str = Field(..., min_length=2, max_length=255)
+    role_family: RoleFamily = "engineering"
+    role_titles: list[str] = Field(default_factory=list)
+    exclude_role_families: list[RoleFamily] = Field(default_factory=list)
+    allow_cross_family_matches: bool = False
     seniority: Seniority
     role_category: RoleCategory
     employment_type: EmploymentType

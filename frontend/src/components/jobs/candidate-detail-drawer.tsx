@@ -154,6 +154,30 @@ export function CandidateDetailDrawer({
 
               <TabsContent value="evidence" className="space-y-3">
                 <div className="rounded-lg border border-border/80 p-3">
+                  <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Why matched</p>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <span className="text-muted-foreground">Title tokens:</span>{" "}
+                      {(result.breakdown_json?.matched_title_tokens ?? []).length > 0
+                        ? (result.breakdown_json?.matched_title_tokens ?? []).join(", ")
+                        : "none"}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Top skills matched:</span>{" "}
+                      {(result.breakdown_json?.matched_skills ?? []).length > 0
+                        ? (result.breakdown_json?.matched_skills ?? []).join(", ")
+                        : "none"}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Similarity:</span>{" "}
+                      {typeof result.breakdown_json?.breakdown?.semantic_effective === "number"
+                        ? `${result.breakdown_json.breakdown.semantic_effective.toFixed(1)}`
+                        : "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border/80 p-3">
                   <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Warnings</p>
                   {warnings.length ? (
                     <div className="flex flex-wrap gap-1">
@@ -175,6 +199,12 @@ export function CandidateDetailDrawer({
                   ) : (
                     <p className="text-muted-foreground">No explicit reason string for this decision. Review CV and breakdown.</p>
                   )}
+                  {result.breakdown_json?.inferred_role_family ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Inferred family: {String(result.breakdown_json.inferred_role_family)} (
+                      {String(result.breakdown_json.inferred_role_family_confidence ?? "-")})
+                    </p>
+                  ) : null}
                   {(result.breakdown_json?.missing_must_have ?? []).length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {result.breakdown_json.missing_must_have?.map((missing) => (
